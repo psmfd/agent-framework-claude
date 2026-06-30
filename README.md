@@ -59,6 +59,7 @@ agent-framework-claude/
 ├── AGENTS.md              # Agent catalog — routing source of truth
 ├── CLAUDE.md              # Claude Code-specific configuration (thin, points to AGENTS.md)
 ├── CONTRIBUTING.md        # Agent authoring guidelines
+├── SECURITY.md            # Vulnerability disclosure policy (ADR-081)
 ├── .gitignore             # Prevents secrets from being committed
 ├── .markdownlint-cli2.jsonc # markdownlint config — house-style rule tuning
 ├── .yamllint.yaml         # yamllint config — workflow-file tuning

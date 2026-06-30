@@ -1,0 +1,11 @@
+# zizmor configuration (ADR-081).
+#
+# lint-pr-title.yml intentionally uses `pull_request_target` so the PR-title check
+# can report on fork PRs. It is safe: the workflow checks out NO code, runs only a
+# SHA-pinned action, and holds `pull-requests: read` only (the safety rationale is
+# documented in the workflow file itself). Suppress the dangerous-triggers audit
+# for that one file rather than weaken it everywhere.
+rules:
+  dangerous-triggers:
+    ignore:
+      - lint-pr-title.yml
