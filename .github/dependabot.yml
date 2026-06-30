@@ -23,3 +23,12 @@ updates:
     commit-message:
       prefix: "chore"
     open-pull-requests-limit: 5
+    # conventional-changelog-conventionalcommits v10 requires conventional-changelog-writer@9,
+    # but semantic-release@25's bundled release-notes-generator@14 still uses writer@8 — a v10
+    # bump would SILENTLY break changelog generation on release (ADR-082). Block major bumps
+    # until release-notes-generator adopts writer@9.
+    # Watch signal: `npm view @semantic-release/release-notes-generator dependencies`
+    # (safe when it shows conventional-changelog-writer ^9.0.0). Then lift this ignore.
+    ignore:
+      - dependency-name: "conventional-changelog-conventionalcommits"
+        update-types: ["version-update:semver-major"]
