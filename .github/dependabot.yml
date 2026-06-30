@@ -1,0 +1,25 @@
+# Dependabot version updates (ADR-081). Closes the supply-chain visibility gap
+# noted in ADR-055: keeps SHA-pinned GitHub Actions current and surfaces npm
+# (semantic-release) drift as reviewable PRs. PRs target `dev` per GitHub Flow.
+# This file must live on the default branch (`dev`) to take effect.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    target-branch: "dev"
+    commit-message:
+      prefix: "ci"
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    target-branch: "dev"
+    commit-message:
+      prefix: "chore"
+    open-pull-requests-limit: 5

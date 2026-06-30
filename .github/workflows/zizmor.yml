@@ -1,0 +1,33 @@
+# GitHub Actions security static analysis (ADR-081). zizmor audits the workflows
+# for template injection, dangerous triggers, excessive permissions, and unpinned
+# / impostor actions — a layer no other tool in the stack covers. SARIF is uploaded
+# to the Security tab (free on public repos).
+name: zizmor
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@192e21d79ab29983730a13d1382995c2307fbcaa  # v0.5.7
+        with:
+          # Scan the whole repo (default). Findings upload as SARIF; the action
+          # fails the job on findings at/above the default persona, making this a
+          # gate once promoted to a required check.
+          persona: regular
