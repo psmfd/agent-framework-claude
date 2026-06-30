@@ -2,9 +2,9 @@
   "name": "agent-framework",
   "version": "0.0.0-semantically-released",
   "private": true,
-  "description": "Shared AI agent skills, rules, and instructions for Claude Code and GitHub Copilot",
+  "description": "Shared AI agent definitions and rules for Claude Code",
   "devDependencies": {
-    "conventional-changelog-conventionalcommits": "^8.0.0",
-    "semantic-release": "^25.0.0"
+    "conventional-changelog-conventionalcommits": "^9.0.0",
+    "semantic-release": "^25.0.5"
   }
 }

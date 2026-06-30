@@ -1,0 +1,37 @@
+# Dependabot version updates (ADR-081). Closes the supply-chain visibility gap
+# noted in ADR-055: keeps SHA-pinned GitHub Actions current and surfaces npm
+# (semantic-release) drift as reviewable PRs. PRs target `dev` per GitHub Flow.
+# This file must live on the default branch (`dev`) to take effect.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    target-branch: "dev"
+    commit-message:
+      prefix: "ci"
+    open-pull-requests-limit: 10
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    target-branch: "dev"
+    commit-message:
+      prefix: "chore"
+      # devDependency updates carry the "deps-dev" scope; without this they default to
+      # `build(deps-dev)`, which lint-pr-title rejects (no `build` in the allowed CC types).
+      prefix-development: "chore"
+    open-pull-requests-limit: 5
+    # conventional-changelog-conventionalcommits v10 requires conventional-changelog-writer@9,
+    # but semantic-release@25's bundled release-notes-generator@14 still uses writer@8 — a v10
+    # bump would SILENTLY break changelog generation on release (ADR-082). Block major bumps
+    # until release-notes-generator adopts writer@9.
+    # Watch signal: `npm view @semantic-release/release-notes-generator dependencies`
+    # (safe when it shows conventional-changelog-writer ^9.0.0). Then lift this ignore.
+    ignore:
+      - dependency-name: "conventional-changelog-conventionalcommits"
+        update-types: ["version-update:semver-major"]

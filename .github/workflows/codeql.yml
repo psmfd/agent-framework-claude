@@ -1,0 +1,36 @@
+# CodeQL static analysis for GitHub Actions (ADR-081). The `actions` extractor
+# (GA April 2025) taint-tracks data flow across workflow `run:` steps — deeper
+# than zizmor's pattern matching, with a different false-positive profile. Free on
+# public repos; results upload to the Security tab.
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+  schedule:
+    - cron: "0 6 * * 1"  # weekly main-branch sweep (Mondays 06:00 UTC)
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: codeql
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@c35d1b164463ee62a100735382aaaa525c5d3496  # codeql-bundle-v2.25.6
+        with:
+          languages: actions
+          queries: security-extended
+      - uses: github/codeql-action/analyze@c35d1b164463ee62a100735382aaaa525c5d3496  # codeql-bundle-v2.25.6
+        with:
+          category: "/language:actions"
