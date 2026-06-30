@@ -1,0 +1,245 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/agent-framework/scripts/wim/manifest.schema.json",
+  "title": "Work-Item Manifest",
+  "description": "Frozen contract for apply-manifest.sh. Declares an Epic -> Feature -> User Story tree and/or a flat list of standalone issues for ADO Boards or GitHub Issues + Projects v2. At least one of 'epic' or 'issues' should be present.",
+  "type": "object",
+  "required": ["backend"],
+  "properties": {
+    "backend": {
+      "description": "Selects which create-*.sh backend the driver invokes.",
+      "type": "string",
+      "enum": ["ado", "github"]
+    },
+    "ado": {
+      "description": "Required when backend=ado. Globals applied to every item unless overridden in the per-item ado block.",
+      "type": "object",
+      "required": ["organization", "project", "process", "area", "iteration"],
+      "additionalProperties": false,
+      "properties": {
+        "organization": {
+          "type": "string",
+          "format": "uri",
+          "description": "Org URL, e.g. https://dev.azure.com/myorg"
+        },
+        "project": { "type": "string" },
+        "process": {
+          "type": "string",
+          "enum": ["agile", "scrum", "cmmi"],
+          "description": "Selects the effort-field reference name (StoryPoints/Effort/Size)."
+        },
+        "area": {
+          "type": "string",
+          "description": "Backslash-delimited area path including project root, e.g. Contoso\\Backend"
+        },
+        "iteration": {
+          "type": "string",
+          "description": "Backslash-delimited iteration path including project root."
+        }
+      }
+    },
+    "github": {
+      "description": "Required when backend=github. Globals applied to every item unless overridden in the per-item github block.",
+      "type": "object",
+      "required": ["repo"],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "type": "string",
+          "pattern": "^[^/]+/[^/]+$",
+          "description": "owner/repo"
+        },
+        "org": {
+          "type": "string",
+          "description": "Org login. Required to set Issue Type via GraphQL; omit on user-owned repos."
+        },
+        "project": {
+          "type": "string",
+          "description": "Project v2 title to add items to. Pass-through to gh issue create --project."
+        },
+        "milestone": { "type": "string" },
+        "default_labels": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "epic": { "$ref": "#/definitions/epic" },
+    "issues": {
+      "description": "Optional flat list of standalone issues created outside the Epic -> Feature -> Story hierarchy. No type/* label is auto-injected (unlike create-epic.sh), so a standalone issue can carry any type label such as 'bug'.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/standalone_issue" }
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "backend": { "const": "ado" } } },
+      "then": { "required": ["ado"] }
+    },
+    {
+      "if": { "properties": { "backend": { "const": "github" } } },
+      "then": { "required": ["github"] }
+    }
+  ],
+  "definitions": {
+    "epic": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "description": { "type": "string" },
+        "tags": { "type": "string", "description": "ADO: System.Tags semicolon-separated. GitHub: ignored." },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "GitHub: extra labels appended to default_labels and the type/epic auto-label."
+        },
+        "ado": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "area": { "type": "string" },
+            "iteration": { "type": "string" },
+            "priority": { "type": "integer", "minimum": 1, "maximum": 4 },
+            "business_value": { "type": "integer" }
+          }
+        },
+        "github": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "milestone": { "type": "string" },
+            "project": { "type": "string" }
+          }
+        },
+        "features": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/feature" }
+        }
+      }
+    },
+    "feature": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "description": { "type": "string" },
+        "tags": { "type": "string" },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "ado": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "area": { "type": "string" },
+            "iteration": { "type": "string" },
+            "priority": { "type": "integer", "minimum": 1, "maximum": 4 },
+            "value_area": { "type": "string", "enum": ["Business", "Architectural"] }
+          }
+        },
+        "github": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "milestone": { "type": "string" },
+            "project": { "type": "string" }
+          }
+        },
+        "stories": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/story" }
+        }
+      }
+    },
+    "story": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "description": { "type": "string" },
+        "acceptance_criteria": {
+          "type": "string",
+          "description": "Markdown checklist or paragraphs. Converted to HTML for ADO; rendered into a body section for GitHub."
+        },
+        "tags": { "type": "string" },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "ado": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "area": { "type": "string" },
+            "iteration": { "type": "string" },
+            "priority": { "type": "integer", "minimum": 1, "maximum": 4 },
+            "story_points": { "type": "number", "minimum": 0 },
+            "assigned_to": { "type": "string" }
+          }
+        },
+        "github": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "milestone": { "type": "string" },
+            "project": { "type": "string" },
+            "assignees": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "standalone_issue": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "description": { "type": "string" },
+        "acceptance_criteria": {
+          "type": "string",
+          "description": "Markdown checklist or paragraphs. Converted to HTML for ADO; rendered into a body section for GitHub."
+        },
+        "tags": { "type": "string", "description": "ADO: System.Tags semicolon-separated. GitHub: ignored." },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "GitHub: applied verbatim. No type/* label is injected automatically — to file a bug, include 'bug' here."
+        },
+        "ado": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "ADO work item type display name (e.g. 'Bug', 'Task', 'Issue'). Valid types depend on the process. Defaults to 'Issue' when omitted."
+            },
+            "area": { "type": "string" },
+            "iteration": { "type": "string" },
+            "priority": { "type": "integer", "minimum": 1, "maximum": 4 },
+            "severity": {
+              "type": "string",
+              "enum": ["1 - Critical", "2 - High", "3 - Medium", "4 - Low"],
+              "description": "ADO: Microsoft.VSTS.Common.Severity. Applicable to the Bug type."
+            },
+            "assigned_to": { "type": "string" }
+          }
+        },
+        "github": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "milestone": { "type": "string" },
+            "project": { "type": "string" },
+            "assignees": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "skillListingBudgetFraction": 0.03,
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
+    "MAX_THINKING_TOKENS": "32000",
+    "BASH_DEFAULT_TIMEOUT_MS": "120000",
+    "BASH_MAX_TIMEOUT_MS": "600000"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(chmod:*)",
+      "Bash(command:*)",
+      "Bash(cp:*)",
+      "Bash(curl:*)",
+      "Bash(date:*)",
+      "Bash(echo:*)",
+      "Bash(find:*)",
+      "Bash(gh:*)",
+      "Bash(git:*)",
+      "Bash(head:*)",
+      "Bash(jq:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(shellcheck:*)",
+      "Bash(sort:*)",
+      "Bash(tail:*)",
+      "Bash(tee:*)",
+      "Bash(wc:*)",
+      "Read(.wt_tmp/**)",
+      "Edit(.wt_tmp/**)",
+      "Write(.wt_tmp/**)"
+    ],
+    "deny": [],
+    "ask": [],
+    "defaultMode": "default"
+  },
+  "skillOverrides": {
+    "ansible-expert": "name-only",
+    "docker-expert": "name-only",
+    "helm-expert": "name-only",
+    "dotnet-expert": "name-only",
+    "tauri-expert": "name-only",
+    "azure-devops-expert": "name-only",
+    "vcluster-expert": "name-only"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/bash-destructive-guard.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "^(Bash|Write|Edit|MultiEdit|NotebookEdit)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-secrets-guard.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-gh-identity-guard.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/stop-preflight-check.sh"
+          }
+        ]
+      }
+    ],
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/worktree-create.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/worktree-remove.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
+  "effortLevel": "high",
+  "agentPushNotifEnabled": true,
+  "skipWorkflowUsageWarning": true
+}

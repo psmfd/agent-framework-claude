@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+#
+# tests/wim/fixtures/bin/az — minimal az CLI shim for wim suite tests.
+#
+# Behavior is driven by WIM_TEST_STATE_DIR (default: /tmp/wim-test-state):
+#   az-counter           next ID to assign on create
+#   az-items.json        { "<type>|<title>": <id>, ... }
+#   az-relations.log     newline-separated "<child>\t<parent>"
+#   az-calls.log         every invocation, one line per call
+#
+# Subcommands implemented:
+#   az devops configure ...                    -> no-op, exit 0
+#   az boards query --wiql "..."               -> [] or [{"id": N}]
+#   az boards work-item create --type T --title TT [...] -> {"id": N, ...}
+#   az boards work-item relation add --id C --target-id P -> {}
+#
+
+set -euo pipefail
+
+STATE_DIR="${WIM_TEST_STATE_DIR:-/tmp/wim-test-state}"
+mkdir -p "$STATE_DIR"
+
+COUNTER_FILE="$STATE_DIR/az-counter"
+ITEMS_FILE="$STATE_DIR/az-items.json"
+RELATIONS_FILE="$STATE_DIR/az-relations.log"
+CALLS_FILE="$STATE_DIR/az-calls.log"
+
+[[ -f "$COUNTER_FILE"  ]] || echo 4000 > "$COUNTER_FILE"
+[[ -f "$ITEMS_FILE"    ]] || echo '{}' > "$ITEMS_FILE"
+[[ -f "$RELATIONS_FILE" ]] || : > "$RELATIONS_FILE"
+[[ -f "$CALLS_FILE"    ]] || : > "$CALLS_FILE"
+
+printf 'az %s\n' "$*" >> "$CALLS_FILE"
+
+next_id() {
+  local n
+  n=$(< "$COUNTER_FILE")
+  echo "$((n + 1))" > "$COUNTER_FILE"
+  echo "$n"
+}
+
+flag_value() {
+  # flag_value --foo "$@" -> echoes the value following --foo, or empty.
+  local needle="$1"; shift
+  while (( $# > 0 )); do
+    if [[ "$1" == "$needle" ]]; then
+      echo "${2:-}"
+      return 0
+    fi
+    shift
+  done
+  return 0
+}
+
+case "${1:-}" in
+  devops|extension|login|account)
+    exit 0
+    ;;
+  boards)
+    case "${2:-}" in
+      query)
+        # Extract title from WIQL: System.Title = '...'
+        wiql=$(flag_value --wiql "$@")
+        # Title is delimited by '...' and terminated by "' AND [System.AreaPath]".
+        # WIQL escaping doubles single-quotes (''), so capture greedily up to that
+        # delimiter, then reverse the escaping to recover the original lookup key.
+        raw_title=$(printf '%s' "$wiql" | sed -n "s/.*\[System\.Title\] = '\(.*\)' AND \[System\.AreaPath\].*/\1/p")
+        title=$(printf '%s' "$raw_title" | sed "s/''/'/g")
+        wi_type=$(printf '%s' "$wiql" | sed -n "s/.*\[System\.WorkItemType\] = '\([^']*\)'.*/\1/p")
+        key="${wi_type}|${title}"
+        existing=$(jq -r --arg k "$key" '.[$k] // empty' "$ITEMS_FILE")
+        if [[ -n "$existing" ]]; then
+          jq -nc --argjson id "$existing" '[ { id: $id } ]'
+        else
+          echo '[]'
+        fi
+        exit 0
+        ;;
+      work-item)
+        case "${3:-}" in
+          create)
+            shift 3
+            wi_type=$(flag_value --type "$@")
+            wi_title=$(flag_value --title "$@")
+            new=$(next_id)
+            key="${wi_type}|${wi_title}"
+            tmp=$(mktemp)
+            jq --arg k "$key" --argjson v "$new" '. + {($k): $v}' "$ITEMS_FILE" > "$tmp"
+            mv "$tmp" "$ITEMS_FILE"
+            jq -nc --argjson id "$new" --arg t "$wi_title" --arg ty "$wi_type" \
+              '{ id: $id, fields: { "System.Title": $t, "System.WorkItemType": $ty }, relations: null }'
+            exit 0
+            ;;
+          relation)
+            shift 3
+            case "${1:-}" in
+              add)
+                shift
+                child=$(flag_value --id "$@")
+                parent=$(flag_value --target-id "$@")
+                rel=$(flag_value --relation-type "$@")
+                printf '%s\t%s\t%s\n' "$child" "$parent" "$rel" >> "$RELATIONS_FILE"
+                echo '{}'
+                exit 0
+                ;;
+              list-type)
+                jq -nc '[ {"name":"parent"}, {"name":"child"}, {"name":"related"} ]'
+                exit 0
+                ;;
+            esac
+            ;;
+        esac
+        ;;
+    esac
+    ;;
+esac
+
+# Unhandled
+echo "az shim: unhandled args: $*" >&2
+exit 99

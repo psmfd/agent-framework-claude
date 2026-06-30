@@ -1,0 +1,15 @@
+# yamllint configuration for the agent-framework repo.
+# Tuned for GitHub Actions workflow files, whose `uses:` SHA-pins and `run:`
+# blocks routinely exceed 80 columns and whose `on:` key trips the truthy rule.
+extends: default
+
+rules:
+  line-length:
+    max: 120
+    level: warning
+  document-start: disable
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off']
+    check-keys: false
+  comments:
+    min-spaces-from-content: 1

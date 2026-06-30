@@ -1,0 +1,26 @@
+# Never sync secrets or session data
+.credentials.json
+
+# Local-only per-developer identity config — never commit an account name or a
+# per-machine bypass list to this distributed framework (ADR-060). Each developer
+# creates their own .gh-expected-identity (copy .gh-expected-identity.example).
+.gh-expected-identity
+.gh-identity-allowlist
+
+# Project-local Claude Code settings (machine-specific, never commit)
+.claude/
+
+# Worktree temporary directories (created by WorktreeCreate hook)
+.wt_tmp/
+
+# Expertise queue transient claim directory (processing is ephemeral)
+.expertise/processing/
+
+# Expertise queue rejected entries (4xx failures moved here during flush)
+.expertise/failed/
+
+# Node.js (semantic-release CI dependencies)
+node_modules/
+
+# Working document for the Claude-only port — never publish (see PORT-PLAN.md header)
+PORT-PLAN.md

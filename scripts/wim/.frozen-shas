@@ -1,0 +1,12 @@
+# SHA-256 hashes of frozen work-item scripts.
+# Verified by validate.sh check_frozen_scripts. Mismatch fails validation.
+# To legitimately update: re-author through PR review, then update this file
+# and the corresponding .frozen-shas entry. Do not edit casually.
+# See agents/work-item-management-expert.md "Frozen Work-Item Scripts".
+
+6d9b012d91e318e3d5507cf3cbe5358e208a6c9bd11699744a948031bb3a441a  scripts/wim/_lib.sh
+b09bc9711c8818ecf312090908484ab20728751341d02f507a2a3575f4ef2612  scripts/wim/create-epic.sh
+8f08d8d5e5c1e425745e6a79f6d048ddbd350bb5b1d43fd5561e5ee8ba23e450  scripts/wim/create-feature.sh
+1bc1ab424a4f7181885dff55e56a1e0d1ca59cd76b7c799125b5af2c1e0465ff  scripts/wim/create-issue.sh
+e85840333cb62ac196fc3bd6ecb5e7cd00358e55034b95272f971f7efc71ec98  scripts/wim/create-user-story.sh
+1a256561a730ed7bef672f49491dfe9f38351427619710001f7096feb98bdf55  scripts/wim/apply-manifest.sh

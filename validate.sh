@@ -1,0 +1,1207 @@
+#!/usr/bin/env bash
+#
+# Agent Framework — Validation Script
+#
+# Checks that all monolithic agents, rules, and symlinks are consistent
+# with the single-file agent architecture (ADR-074). Run before committing.
+#
+# Usage:
+#   ./validate.sh
+#
+# Exit codes:
+#   0 — all checks passed (warnings are informational only)
+#   1 — one or more errors found
+#
+
+set -euo pipefail
+
+# Bash 4.0+ required: this script uses an associative array (declare -A FM).
+# macOS system bash is 3.2 — fail loudly with a clear message rather than a
+# cryptic `declare: -A: invalid option` mid-run. Exit 2 = precondition failure
+# (rules/script-output-conventions.md).
+if (( ${BASH_VERSINFO[0]:-0} < 4 )); then
+  echo "ERROR [env] validate.sh requires bash 4.0 or later (found ${BASH_VERSION:-unknown})" >&2
+  echo "INFO  On macOS install a modern bash: brew install bash" >&2
+  exit 2
+fi
+
+DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# --- Counters ---
+error_count=0
+warn_count=0
+
+# --- Output helpers ---
+error() {
+  echo "ERROR [$1] $2" >&2
+  ((error_count++)) || true
+}
+
+warn() {
+  echo "WARN  [$1] $2" >&2
+  ((warn_count++)) || true
+}
+
+ok() {
+  echo "OK    [$1] $2"
+}
+
+info() {
+  echo "INFO  $1"
+}
+
+skip() {
+  echo "SKIP  [$1] $2"
+}
+
+# Indented detail line, only printed when VALIDATE_VERBOSE=1
+detail() {
+  if [[ "${VALIDATE_VERBOSE:-}" == "1" ]]; then
+    echo "      $*"
+  fi
+}
+
+# --- Agents permitted to carry execution tools (ADR-069) ---
+# Bash is granted only to agents with a documented execution workflow in their
+# agent file. Adding an agent here requires a PR citing the workflow; per-agent
+# justifications are recorded in ADR-069.
+CLAUDE_BASH_ALLOWED=(
+  gh-cli-expert work-item-management-expert gitflow-expert
+  shell-expert linter
+)
+
+# --- External agents (referenced but not in this repo) ---
+EXTERNAL_AGENTS=()
+
+# --- Frontmatter parser ---
+# Reads YAML frontmatter between --- markers into associative array FM[].
+# Scalar values are stored as FM[key]. YAML list items under a key are
+# accumulated as space-separated values in FM[key_list].
+# Returns 1 if no frontmatter block found.
+declare -A FM
+parse_frontmatter() {
+  local file="$1"
+  FM=()
+
+  local in_fm=0
+  local fm_started=0
+  local current_key=""
+
+  while IFS= read -r line; do
+    if [[ "$line" == "---" ]]; then
+      if [[ $fm_started -eq 0 ]]; then
+        fm_started=1
+        in_fm=1
+        continue
+      else
+        break
+      fi
+    fi
+    [[ $in_fm -eq 0 ]] && continue
+
+    # YAML list item (e.g., "  - shell-expert")
+    if [[ "$line" =~ ^[[:space:]]+-[[:space:]]+(.*) ]]; then
+      local val="${BASH_REMATCH[1]}"
+      # Strip quotes
+      val="${val#\'}" ; val="${val%\'}"
+      val="${val#\"}" ; val="${val%\"}"
+      FM["${current_key}_list"]+="${val} "
+      continue
+    fi
+
+    # Key: value line
+    if [[ "$line" =~ ^([a-zA-Z_][a-zA-Z0-9_-]*):[[:space:]]*(.*) ]]; then
+      current_key="${BASH_REMATCH[1]}"
+      local raw_val="${BASH_REMATCH[2]}"
+      # Strip surrounding quotes
+      raw_val="${raw_val#\'}" ; raw_val="${raw_val%\'}"
+      raw_val="${raw_val#\"}" ; raw_val="${raw_val%\"}"
+      FM["$current_key"]="$raw_val"
+    fi
+  done < "$file"
+
+  [[ $fm_started -eq 1 ]]
+}
+
+# --- Check a single monolithic agent (ADR-074) ---
+# Each expert is one self-contained agents/<name>.md: operational frontmatter
+# (name, description, model, tools, disable-model-invocation) plus the full
+# expertise inline. There is no skills/ layer and no separate wrapper.
+check_agent() {
+  local file="$1"
+  local name
+  name="$(basename "$file" .md)"
+  local had_error=0
+
+  # 1. Frontmatter present
+  if ! parse_frontmatter "$file"; then
+    error "$name" "agent: no frontmatter block found"
+    return
+  fi
+
+  # 2. Required fields
+  local field
+  for field in name description model tools; do
+    if [[ -z "${FM[$field]:-}" ]]; then
+      error "$name" "agent: missing required field '$field'"
+      had_error=1
+    fi
+  done
+
+  # 3. name matches filename
+  if [[ -n "${FM[name]:-}" && "${FM[name]}" != "$name" ]]; then
+    error "$name" "agent: name '${FM[name]}' does not match file name '$name'"
+    had_error=1
+  fi
+
+  # 4. disable-model-invocation must be explicitly true (ADR-074, supersedes
+  #    ADR-033): all delegation is orchestrator-controlled, so an agent must
+  #    not be auto-invocable by the main model.
+  if [[ "${FM[disable-model-invocation]:-}" != "true" ]]; then
+    error "$name" "agent: missing required field 'disable-model-invocation: true' (ADR-074)"
+    had_error=1
+  fi
+
+  # 5. No obsolete 'skills:' reference — the monolithic pattern inlines the
+  #    expertise; a skills: block means content was not collapsed (ADR-074).
+  if [[ -n "${FM[skills_list]:-}" || -n "${FM[skills]:-}" ]]; then
+    error "$name" "agent: 'skills:' is obsolete under the monolithic pattern (ADR-074) — inline the expertise"
+    had_error=1
+  fi
+
+  # 6. Execution-tool policy (ADR-069): Bash only for allowlisted agents.
+  #    Comma-to-space normalization gives word-boundary matching, so a
+  #    hypothetical tool name merely containing "Bash" cannot false-positive.
+  local tools_normalized=" ${FM[tools]:-} "
+  tools_normalized="${tools_normalized//,/ }"
+  if [[ "$tools_normalized" == *" Bash "* ]]; then
+    local bash_ok=0
+    local bash_allowed_agent
+    for bash_allowed_agent in "${CLAUDE_BASH_ALLOWED[@]}"; do
+      if [[ "$name" == "$bash_allowed_agent" ]]; then
+        bash_ok=1
+        break
+      fi
+    done
+    if [[ $bash_ok -eq 0 ]]; then
+      error "$name" "agent: 'Bash' requires a documented execution workflow — add '$name' to CLAUDE_BASH_ALLOWED in validate.sh with justification (ADR-069) or remove Bash from tools"
+      had_error=1
+    fi
+  fi
+
+  # 7. Body must carry the expertise inline (monolithic — ADR-074)
+  local body
+  body="$(get_body_after_frontmatter "$file")"
+  if [[ ${#body} -lt 200 ]]; then
+    error "$name" "agent: body is only ${#body} chars — a monolithic agent must contain its full expertise inline (ADR-074)"
+    had_error=1
+  fi
+
+  if [[ $had_error -eq 0 ]]; then
+    ok "$name" "All checks passed"
+  fi
+}
+
+# --- Get body content after frontmatter ---
+# Returns everything after the second --- marker.
+get_body_after_frontmatter() {
+  local file="$1"
+  local found_first=0
+  local found_second=0
+  local body=""
+
+  while IFS= read -r line; do
+    if [[ "$line" == "---" ]]; then
+      if [[ $found_first -eq 0 ]]; then
+        found_first=1
+        continue
+      elif [[ $found_second -eq 0 ]]; then
+        found_second=1
+        continue
+      fi
+    fi
+    if [[ $found_second -eq 1 ]]; then
+      body+="$line"$'\n'
+    fi
+  done < "$file"
+
+  echo "$body"
+}
+
+# --- Valid ADR status values ---
+ADR_VALID_STATUSES=(
+  "Proposed"
+  "Accepted"
+  "Deprecated"
+)
+# "Superseded by ..." is also valid — checked via prefix match
+
+# --- ADR required sections ---
+ADR_REQUIRED_SECTIONS=(
+  "Context and Problem Statement"
+  "Considered Options"
+  "Decision Outcome"
+)
+
+# --- Check ADRs ---
+check_adrs() {
+  local adrs_dir="$DOTFILES_DIR/adrs"
+  [[ ! -d "$adrs_dir" ]] && return
+
+  local prev_num=-1
+  local had_adr=0
+
+  # Collect ADR files (exclude TEMPLATE.md), sorted by name
+  local adr_files=()
+  while IFS= read -r f; do
+    adr_files+=("$f")
+  done < <(find "$adrs_dir" -maxdepth 1 -name '[0-9]*.md' -type f | sort)
+
+  for adr_file in "${adr_files[@]}"; do
+    had_adr=1
+    local filename
+    filename="$(basename "$adr_file")"
+
+    # Check sequential numbering
+    local num_str="${filename%%-*}"
+    # Enforce the zero-padded three-digit form (rules/adr-required.md).
+    if [[ ! "$num_str" =~ ^[0-9]{3}$ ]]; then
+      error "adrs" "$filename: ADR number '$num_str' must be zero-padded to three digits (e.g. 042-)"
+    fi
+    local num=$((10#$num_str))
+    # Numbers must be unique and ascending; gaps ARE allowed — ADRs may be
+    # dropped when forking the framework (ADR-076) and numbers are never reused.
+    if [[ $num -eq $prev_num ]]; then
+      error "adrs" "$filename: duplicate ADR number $(printf '%03d' "$num") — numbers must never be reused"
+    elif [[ $num -lt $prev_num ]]; then
+      error "adrs" "$filename: ADR number $(printf '%03d' "$num") out of order (follows $(printf '%03d' "$prev_num"))"
+    fi
+    prev_num=$num
+
+    # Check Status line
+    local status_line
+    status_line="$(grep -m1 '^\*\*Status:\*\*' "$adr_file" 2>/dev/null || true)"
+    if [[ -z "$status_line" ]]; then
+      error "adrs" "$filename: missing **Status:** line"
+    else
+      local status_val="${status_line#\*\*Status:\*\* }"
+      local valid_status=0
+      for s in "${ADR_VALID_STATUSES[@]}"; do
+        if [[ "$status_val" == "$s" ]]; then
+          valid_status=1
+          break
+        fi
+      done
+      # Check for "Superseded by ..." prefix
+      if [[ $valid_status -eq 0 && "$status_val" == Superseded\ by* ]]; then
+        valid_status=1
+      fi
+      if [[ $valid_status -eq 0 ]]; then
+        error "adrs" "$filename: invalid status '$status_val' (expected: ${ADR_VALID_STATUSES[*]}, or 'Superseded by ...')"
+      fi
+    fi
+
+    # Check Date line
+    local date_line
+    date_line="$(grep -m1 '^\*\*Date:\*\*' "$adr_file" 2>/dev/null || true)"
+    if [[ -z "$date_line" ]]; then
+      warn "adrs" "$filename: missing **Date:** line"
+    fi
+
+    # Check required sections
+    local body
+    body="$(cat "$adr_file")"
+    for section in "${ADR_REQUIRED_SECTIONS[@]}"; do
+      if ! echo "$body" | grep -q "^## $section"; then
+        error "adrs" "$filename: missing required section '## $section'"
+      fi
+    done
+  done
+
+  # Check TEMPLATE.md exists
+  if [[ ! -f "$adrs_dir/TEMPLATE.md" ]]; then
+    warn "adrs" "TEMPLATE.md not found in adrs/"
+  fi
+
+  if [[ $had_adr -eq 1 && $error_count -eq 0 ]]; then
+    ok "adrs" "All ADRs valid (${#adr_files[@]} records)"
+  elif [[ $had_adr -eq 0 ]]; then
+    info "No ADR files found in adrs/"
+  fi
+}
+
+# --- Check branch PR state ---
+check_branch_pr_state() {
+  # Skip if gh is not available or not in a git repo
+  command -v gh >/dev/null 2>&1 || return
+  git rev-parse --git-dir >/dev/null 2>&1 || return
+
+  local branch
+  branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+  [[ -z "$branch" ]] && return
+
+  # Skip default branches — they never have PRs targeting themselves
+  [[ "$branch" == "main" || "$branch" == "master" ]] && return
+
+  # Check if a merged PR exists for this branch
+  local pr_num
+  pr_num="$(gh pr list --head "$branch" --state merged --json number --jq '.[0].number // empty' 2>/dev/null || true)"
+
+  if [[ -n "$pr_num" ]]; then
+    warn "branch" "PR #${pr_num} for branch '$branch' is already merged — create a new branch for additional changes"
+  fi
+}
+
+# --- Check active gh account can resolve the origin repo (multi-account hosts) ---
+# Non-fatal: a mismatch is a WARN, never an ERROR. Skipped when a token is in the
+# environment (CI sets GH_TOKEN/GITHUB_TOKEN) and for non-github.com remotes.
+# See ADR-052 and docs/multi-account-git-identity.md.
+check_gh_identity() {
+  command -v gh >/dev/null 2>&1 || return
+  git rev-parse --git-dir >/dev/null 2>&1 || return
+
+  # A token in the environment overrides keyring accounts — skip to avoid CI noise.
+  [[ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]] && return
+
+  local remote_url
+  remote_url="$(git remote get-url origin 2>/dev/null || true)"
+  [[ -z "$remote_url" ]] && return
+
+  # Only plain github.com remotes; SSH host aliases and GHES are out of scope.
+  case "$remote_url" in
+    *github.com[:/]*) ;;
+    *) return ;;
+  esac
+
+  local slug
+  slug="$(printf '%s' "$remote_url" | sed -E 's/(\.git)$//; s#.*github\.com[:/]([^/]+/[^/]+)$#\1#')"
+  [[ "$slug" == */* ]] || return
+
+  if gh api "repos/${slug}" --silent >/dev/null 2>&1; then
+    ok "gh-identity" "active gh account can resolve ${slug}"
+  else
+    local active
+    active="$(gh api user --jq '.login' 2>/dev/null || true)"
+    warn "gh-identity" "active gh account '${active:-unknown}' cannot resolve ${slug} — run 'gh auth switch' to the owning account before using gh-backed tooling"
+  fi
+}
+
+# --- Check agent catalog in AGENTS.md ---
+check_agent_catalog() {
+  # Delegates to the canonical drift gate (ADR-062). scripts/regen-agent-catalog.sh
+  # --check owns what the former inline checks did (name presence vs agents/*.md
+  # and routing-mirror parity) PLUS column-content drift: Domain/Use-when across
+  # AGENTS.md and the routing mirror (rules/agent-first-selection.md), and README
+  # Tier/Model. AGENTS.md is the canonical source.
+  local script="$DOTFILES_DIR/scripts/regen-agent-catalog.sh"
+  if [[ ! -x "$script" ]]; then
+    warn "catalog" "scripts/regen-agent-catalog.sh missing or not executable — skipping catalog drift check"
+    return
+  fi
+
+  local out rc=0
+  out="$("$script" --check 2>&1)" || rc=$?
+
+  # Re-emit the sub-script's presence warnings through our own counter.
+  while IFS= read -r msg; do
+    [[ -n "$msg" ]] && warn "catalog" "$msg"
+  done < <(printf '%s\n' "$out" | sed -n 's/^WARN  \[[^]]*\] //p')
+
+  if [[ $rc -eq 0 ]]; then
+    ok "catalog" "Agent catalog consistent (AGENTS.md canonical; routing mirror + README tier/model checked)"
+  else
+    # Surface the drift detail (stderr, per output conventions), fold into one error.
+    printf '%s\n' "$out" | grep '^ERROR' >&2 || true
+    error "catalog" "Agent catalog drift — run: scripts/regen-agent-catalog.sh --write (README tier/model fixed by hand)"
+  fi
+}
+
+# --- Check README catalog sections ---
+# Verifies that README.md Current Agents/Rules sections match files on disk.
+# All discrepancies are warnings, not errors — drift may be intentional during
+# in-progress work.
+check_readme_catalog() {
+  local readme="$DOTFILES_DIR/README.md"
+  local readme_warns=0
+
+  if [[ ! -f "$readme" ]]; then
+    warn "readme-catalog" "README.md not found — cannot verify catalog sections"
+    return
+  fi
+
+  # --- Agents catalog ---
+  local agents_dir="$DOTFILES_DIR/agents"
+  if [[ -d "$agents_dir" ]]; then
+    # Extract agent names from README "Current Agents" table rows
+    # Format: | `agent-name` | ... |
+    local readme_agents=()
+    local in_section=0
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^##[[:space:]] && ! "$line" =~ ^### ]]; then
+        if [[ "$line" =~ ^##[[:space:]]Current[[:space:]]Agents ]]; then
+          in_section=1
+        else
+          in_section=0
+        fi
+      fi
+      if [[ $in_section -eq 1 && "$line" =~ ^\|[[:space:]]*\`([a-zA-Z0-9_-]+)\`[[:space:]]*\| ]]; then
+        readme_agents+=("${BASH_REMATCH[1]}")
+      fi
+    done < "$readme"
+
+    # Forward: every README entry must have an agents/ file
+    for name in "${readme_agents[@]}"; do
+      if [[ ! -f "$agents_dir/${name}.md" ]]; then
+        warn "readme-catalog" "README lists agent '$name' but agents/${name}.md not found"
+        ((readme_warns++)) || true
+      fi
+    done
+
+    # Reverse: every agents/ file must have a README entry
+    for agent_file in "$agents_dir"/*.md; do
+      [[ ! -f "$agent_file" ]] && continue
+      local name
+      name="$(basename "$agent_file" .md)"
+      local found=0
+      for readme_name in "${readme_agents[@]}"; do
+        if [[ "$readme_name" == "$name" ]]; then
+          found=1
+          break
+        fi
+      done
+      if [[ $found -eq 0 ]]; then
+        warn "readme-catalog" "agents/${name}.md exists but not listed in README Current Agents"
+        ((readme_warns++)) || true
+      fi
+    done
+  fi
+
+  # --- Rules catalog ---
+  local rules_dir="$DOTFILES_DIR/rules"
+  if [[ -d "$rules_dir" ]]; then
+    # Extract rule names from README "Current Rules" section H3 headings
+    # Format: ### Display Name (`rules/<name>.md`)
+    local readme_rules=()
+    local in_section=0
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^##[[:space:]] && ! "$line" =~ ^### ]]; then
+        if [[ "$line" =~ ^##[[:space:]]Current[[:space:]]Rules ]]; then
+          in_section=1
+        else
+          in_section=0
+        fi
+      fi
+      if [[ $in_section -eq 1 && "$line" =~ rules/([a-zA-Z0-9_-]+)\.md ]]; then
+        readme_rules+=("${BASH_REMATCH[1]}")
+      fi
+    done < "$readme"
+
+    # Forward: every README entry must have a rules/ file
+    for name in "${readme_rules[@]}"; do
+      if [[ ! -f "$rules_dir/${name}.md" ]]; then
+        warn "readme-catalog" "README lists rule '$name' but rules/${name}.md not found"
+        ((readme_warns++)) || true
+      fi
+    done
+
+    # Reverse: every rules/ file must have a README entry
+    for rule_file in "$rules_dir"/*.md; do
+      [[ ! -f "$rule_file" ]] && continue
+      local name
+      name="$(basename "$rule_file" .md)"
+      local found=0
+      for readme_name in "${readme_rules[@]}"; do
+        if [[ "$readme_name" == "$name" ]]; then
+          found=1
+          break
+        fi
+      done
+      if [[ $found -eq 0 ]]; then
+        warn "readme-catalog" "rules/${name}.md exists but not listed in README Current Rules"
+        ((readme_warns++)) || true
+      fi
+    done
+  fi
+
+  local sections_checked=0
+  [[ -d "$DOTFILES_DIR/agents" ]] && ((sections_checked++)) || true
+  [[ -d "$DOTFILES_DIR/rules" ]] && ((sections_checked++)) || true
+
+  if [[ $sections_checked -gt 0 && $readme_warns -eq 0 ]]; then
+    ok "readme-catalog" "README catalog sections consistent (agents/rules)"
+  fi
+}
+
+# --- Check web/instructions.md sync drift ---
+# Detects drift between source-of-truth files and the curated web distillate.
+# Two layers:
+#   (a) Heuristic — every agent on disk must appear as a row in the Agent Catalog table
+#   (b) Manifest — diff-aware: source file change without web/instructions.md change warns
+# Override: a "Web-Sync-Skip: <reason>" trailer in any commit since the diff base
+# suppresses the manifest layer (with a loud, auditable WARN).
+check_web_sync_drift() {
+  local web_file="web/instructions.md"
+  local warn_start=$warn_count
+
+  # If the distillate is missing entirely, skip both layers with a clear message
+  if [[ ! -f "$DOTFILES_DIR/$web_file" ]]; then
+    warn "web-sync" "$web_file not found — drift check skipped"
+    return
+  fi
+
+  # --- Heuristic layer (always runs) ---
+  local agent_files=()
+  while IFS= read -r d; do
+    agent_files+=("$d")
+  done < <(find "$DOTFILES_DIR/agents" -mindepth 1 -maxdepth 1 -name '*.md' -type f 2>/dev/null | sort)
+
+  local agent_file agent_name
+  for agent_file in "${agent_files[@]}"; do
+    agent_name="$(basename "$agent_file" .md)"
+    [[ "$agent_name" =~ ^[a-z][a-z0-9_-]*$ ]] || continue
+    if ! grep -qE "^\| \`$agent_name\` \|" "$DOTFILES_DIR/$web_file"; then
+      warn "web-sync" "agent '$agent_name' missing from Agent Catalog table in $web_file"
+      detail "Expected a row beginning with: | \`$agent_name\` |"
+    fi
+  done
+
+  # --- Manifest layer (diff-aware) ---
+  # Determine the right base. Prefer --fork-point so an "Update branch" merge
+  # commit on the feature branch does not include incoming dev commits in the diff.
+  local base=""
+  base=$(git -C "$DOTFILES_DIR" merge-base --fork-point origin/dev HEAD 2>/dev/null) || base=""
+  if [[ -z "$base" ]]; then
+    base=$(git -C "$DOTFILES_DIR" merge-base HEAD '@{upstream}' 2>/dev/null) || base=""
+  fi
+  if [[ -z "$base" ]]; then
+    base=$(git -C "$DOTFILES_DIR" merge-base HEAD origin/dev 2>/dev/null) || base=""
+  fi
+
+  if [[ -z "$base" ]]; then
+    detail "no diff base reachable (origin/dev or @{upstream}); manifest layer skipped"
+    if [[ $warn_count -eq $warn_start ]]; then
+      ok "web-sync" "no Skill Catalog drift detected (heuristic only)"
+    fi
+    return
+  fi
+
+  local head_sha=""
+  head_sha=$(git -C "$DOTFILES_DIR" rev-parse HEAD 2>/dev/null) || head_sha=""
+  if [[ -z "$head_sha" ]] || [[ "$head_sha" == "$base" ]]; then
+    detail "HEAD is at the diff base; manifest layer skipped (no commits since base)"
+    if [[ $warn_count -eq $warn_start ]]; then
+      ok "web-sync" "no Skill Catalog drift detected (heuristic only)"
+    fi
+    return
+  fi
+
+  local is_shallow=""
+  is_shallow=$(git -C "$DOTFILES_DIR" rev-parse --is-shallow-repository 2>/dev/null) || is_shallow="false"
+  if [[ "$is_shallow" == "true" ]]; then
+    warn "web-sync" "shallow clone — diff layer may miss commits beyond fetch depth"
+  fi
+
+  # Override: "Web-Sync-Skip: <reason>" trailer (reason text required)
+  local trailer_line=""
+  trailer_line=$(git -C "$DOTFILES_DIR" log "$base..HEAD" --format=%B 2>/dev/null \
+    | grep -E "^Web-Sync-Skip:[[:space:]]+\S" | head -1) || trailer_line=""
+  if [[ -n "$trailer_line" ]]; then
+    local reason=""
+    reason=$(printf '%s' "$trailer_line" | sed -E 's/^Web-Sync-Skip:[[:space:]]+//')
+    warn "web-sync" "override active via Web-Sync-Skip trailer: \"$reason\" — manifest layer suppressed"
+    detail "Override applies to all manifest pairs in this push. Heuristic layer still ran above."
+    return
+  fi
+
+  # Collect changed files (portable; no mapfile)
+  local changed_files=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && changed_files+=("$line")
+  done < <(git -C "$DOTFILES_DIR" diff --name-only "$base" HEAD 2>/dev/null)
+
+  if [[ ${#changed_files[@]} -eq 0 ]]; then
+    if [[ $warn_count -eq $warn_start ]]; then
+      ok "web-sync" "no Skill Catalog drift detected"
+    fi
+    return
+  fi
+
+  # Helper: was this exact path changed?
+  file_in_diff() {
+    local target="$1" f
+    for f in "${changed_files[@]}"; do
+      [[ "$f" == "$target" ]] && return 0
+    done
+    return 1
+  }
+
+  local web_changed=0
+  if file_in_diff "$web_file"; then
+    web_changed=1
+  fi
+
+  # Pair: catalog-bearing files (warn at most once across this category)
+  local catalog_files=(
+    "AGENTS.md"
+    "rules/agent-first-selection.md"
+  )
+  local f catalog_hit=""
+  for f in "${catalog_files[@]}"; do
+    if file_in_diff "$f"; then
+      catalog_hit="$f"
+      break
+    fi
+  done
+  if [[ -n "$catalog_hit" ]] && [[ $web_changed -eq 0 ]]; then
+    warn "web-sync" "$catalog_hit changed but $web_file untouched — review Skill Catalog table"
+    detail "Target: ## Skill Catalog table in $web_file"
+  fi
+
+  # Pair: a monolithic agent file changed (ADR-074)
+  local skill_pattern_changed=()
+  local file
+  for file in "${changed_files[@]}"; do
+    if [[ "$file" =~ ^agents/[^/]+\.md$ ]]; then
+      skill_pattern_changed+=("$file")
+    fi
+  done
+  if [[ ${#skill_pattern_changed[@]} -gt 0 ]] && [[ $web_changed -eq 0 ]]; then
+    local first="${skill_pattern_changed[0]}"
+    local rest_count=$((${#skill_pattern_changed[@]} - 1))
+    local descr="$first"
+    if [[ $rest_count -gt 0 ]]; then
+      descr="$first +$rest_count more"
+    fi
+    warn "web-sync" "agent file(s) changed ($descr) but $web_file untouched — review Agent Catalog table"
+    detail "Changed: ${skill_pattern_changed[*]}"
+    detail "Target: ## Skill Catalog table in $web_file"
+  fi
+
+  # Pair: mirrored rules
+  local mirrored_rules=(
+    orchestrator-protocol plan-before-code agent-first-selection
+    research-parallelism consensus-by-replication github-flow conventional-commits
+    semver-tagging pr-template-standard adr-required
+    debian-baseline post-implementation-review structured-review-format
+    no-mcp-servers secrets-guard gh-identity-guard script-output-conventions
+  )
+  local rule changed_rules=()
+  for rule in "${mirrored_rules[@]}"; do
+    if file_in_diff "rules/${rule}.md"; then
+      changed_rules+=("$rule")
+    fi
+  done
+  if [[ ${#changed_rules[@]} -gt 0 ]] && [[ $web_changed -eq 0 ]]; then
+    warn "web-sync" "mirrored rule(s) changed (${changed_rules[*]}) but $web_file untouched — review matching section(s)"
+    detail "Target: matching sections in $web_file (see Documentation Sync Map in CONTRIBUTING.md)"
+  fi
+
+  if [[ $warn_count -eq $warn_start ]]; then
+    ok "web-sync" "no Skill Catalog or section drift detected"
+  fi
+}
+
+# --- Check delegation map ---
+# Verifies that agents referencing other agents via "delegate to" point to real agents.
+check_delegation_map() {
+  local agents_dir="$DOTFILES_DIR/agents"
+  [[ ! -d "$agents_dir" ]] && return
+
+  local delegation_count=0
+  local missing_count=0
+
+  for agent_file in "$agents_dir"/*.md; do
+    [[ ! -f "$agent_file" ]] && continue
+    local name
+    name="$(basename "$agent_file" .md)"
+    local body
+    body="$(get_body_after_frontmatter "$agent_file")"
+
+    # Match "delegate to <agent-name>" — backtick-wrapped or bare hyphenated names
+    # Skips "delegate to the ..." by requiring backtick or hyphenated name
+    local delegates
+    delegates="$(echo "$body" | grep -oE 'delegate to (the )?`([a-z][a-z0-9_-]*)`' 2>/dev/null | \
+      sed -E 's/.*`([^`]+)`.*/\1/' | sort -u || true)"
+    # Also match bare "delegate to <hyphenated-name>" (must contain a hyphen to avoid common words)
+    local bare_delegates
+    bare_delegates="$(echo "$body" | grep -oE 'delegate to ([a-z][a-z0-9]*-[a-z0-9-]*)' 2>/dev/null | \
+      sed -E 's/delegate to //' | sort -u || true)"
+    delegates="$(printf '%s\n%s' "$delegates" "$bare_delegates" | sort -u)"
+
+    for delegate in $delegates; do
+      [[ -z "$delegate" ]] && continue
+      ((delegation_count++)) || true
+
+      # Skip external agents
+      local is_external=0
+      for ext in "${EXTERNAL_AGENTS[@]}"; do
+        if [[ "$delegate" == "$ext" ]]; then
+          is_external=1
+          break
+        fi
+      done
+      [[ $is_external -eq 1 ]] && continue
+
+      # Check agent file exists
+      if [[ ! -f "$agents_dir/${delegate}.md" ]]; then
+        warn "delegation" "agents/${name}.md delegates to '$delegate' but agents/${delegate}.md not found"
+        ((missing_count++)) || true
+      fi
+    done
+  done
+
+  if [[ $delegation_count -gt 0 && $missing_count -eq 0 ]]; then
+    ok "delegation" "All delegation references resolved ($delegation_count references)"
+  elif [[ $delegation_count -eq 0 ]]; then
+    info "No delegation references found in agent wrappers"
+  fi
+}
+
+# --- Check relative links ---
+# Verifies that relative markdown links in .md files resolve to real files.
+check_relative_links() {
+  local link_count=0
+  local broken_count=0
+
+  # Find all .md files in the repo (exclude .git)
+  while IFS= read -r md_file; do
+    [[ ! -f "$md_file" ]] && continue
+    local dir
+    dir="$(dirname "$md_file")"
+    local rel_path="${md_file#"$DOTFILES_DIR"/}"
+
+    # Skip relative-link check on superseded ADRs. Per rules/adr-required.md
+    # the body of a superseded ADR is frozen — it may legitimately reference
+    # files that the superseding ADR deletes.
+    if [[ "$rel_path" == adrs/*.md ]] && \
+       grep -q '^\*\*Status:\*\* Superseded by' "$md_file" 2>/dev/null; then
+      continue
+    fi
+
+    # Extract markdown links: [text](path). POSIX ERE has no negative lookahead,
+    # so we match ALL [text](target) links and filter absolute URLs / mailto in
+    # the loop below (pure #anchor links drop out via the empty-target guard).
+    local links
+    links="$(grep -oE '\[[^]]*\]\([^)]+\)' "$md_file" 2>/dev/null | \
+      sed -E 's/\[[^]]*\]\(//;s/\)$//' || true)"
+
+    for link in $links; do
+      [[ -z "$link" ]] && continue
+      # Skip placeholder links (e.g., NNN-title.md in templates)
+      [[ "$link" =~ ^[A-Z]{3}- ]] && continue
+      # Skip absolute URLs and mailto (the old PCRE lookahead excluded these)
+      case "$link" in
+        http://*|https://*|mailto:*) continue ;;
+      esac
+      # Strip anchor fragments from link target
+      local target="${link%%#*}"
+      [[ -z "$target" ]] && continue
+      ((link_count++)) || true
+
+      # Resolve relative to the file's directory
+      local resolved="$dir/$target"
+      if [[ ! -e "$resolved" ]]; then
+        error "links" "$rel_path: broken link '$link' — target not found"
+        ((broken_count++)) || true
+      fi
+    done
+  done < <(find "$DOTFILES_DIR" -name '*.md' -not -path '*/.git/*' -not -path '*/node_modules/*' -type f)
+
+  if [[ $link_count -gt 0 && $broken_count -eq 0 ]]; then
+    ok "links" "All relative links valid ($link_count links)"
+  elif [[ $link_count -eq 0 ]]; then
+    info "No relative markdown links found"
+  fi
+}
+
+# --- Check hooks ---
+check_hooks() {
+  # Check that hook scripts referenced by settings.json exist and are executable
+  local settings_file="$DOTFILES_DIR/settings.json"
+  if [[ -f "$settings_file" ]]; then
+    # Extract command strings from hooks config
+    local commands
+    commands="$(grep -oE '"command"[[:space:]]*:[[:space:]]*"[^"]*"' "$settings_file" 2>/dev/null | sed 's/"command"[[:space:]]*:[[:space:]]*"//;s/"$//' || true)"
+    # Iterate per command (one grep match per line) rather than word-splitting
+    # the whole set, so a command with flags (bash -x …) or interpreter prefix
+    # is parsed correctly and the warning shows the full command string.
+    while IFS= read -r cmd; do
+      [[ -z "$cmd" ]] && continue
+      # The script path is the first whitespace token ending in .sh — tolerant
+      # of a "bash"/"bash -x" prefix or a bare path.
+      local script_path="" tok
+      for tok in $cmd; do
+        if [[ "$tok" == *.sh ]]; then
+          script_path="${tok/#\~/$HOME}"
+          break
+        fi
+      done
+      [[ -z "$script_path" ]] && continue
+      if [[ ! -f "$script_path" ]]; then
+        warn "hooks" "settings.json references '$cmd' but file not found at $script_path"
+      elif [[ ! -x "$script_path" ]]; then
+        warn "hooks" "$script_path exists but is not executable — run chmod +x"
+      fi
+    done <<< "$commands"
+  fi
+
+  # Git-only hooks are not referenced by settings.json
+  # (they are installed into .git/hooks/ by setup.sh), so check them explicitly.
+  local git_hook
+  for git_hook in "$DOTFILES_DIR/hooks/secrets-guard.sh" "$DOTFILES_DIR/hooks/gh-identity-guard.sh"; do
+    if [[ ! -f "$git_hook" ]]; then
+      error "hooks" "git hook script not found: ${git_hook#"$DOTFILES_DIR"/}"
+    elif [[ ! -x "$git_hook" ]]; then
+      warn "hooks" "${git_hook#"$DOTFILES_DIR"/} exists but is not executable — run chmod +x"
+    fi
+  done
+}
+
+# --- Check hook scripts pass shellcheck (security-critical; ERROR-gated) ---
+# Hooks enforce security boundaries; a shellcheck defect can silently disable
+# one. Findings are ERRORs (blocking). For a genuine false positive, add a
+# reviewed inline `# shellcheck disable=SCxxxx` to the hook. SKIP (non-fatal)
+# when shellcheck is not installed so CI/dev without it is not blocked.
+check_shellcheck() {
+  if ! command -v shellcheck >/dev/null 2>&1; then
+    skip "shellcheck" "shellcheck not installed — skipping shell-script lint (install to enable)"
+    return
+  fi
+  local scripts=() f
+  while IFS= read -r f; do
+    scripts+=("$f")
+  done < <(find "$DOTFILES_DIR/hooks" "$DOTFILES_DIR/scripts/lib" -maxdepth 1 -name '*.sh' -type f 2>/dev/null | sort)
+  if (( ${#scripts[@]} == 0 )); then
+    skip "shellcheck" "no .sh files in hooks/ or scripts/lib/"
+    return
+  fi
+  # --format=gcc emits exactly one line per finding, so the loop below counts
+  # findings (not multi-line context blocks) — one error() per real defect.
+  # Capture stdout only; shellcheck's own diagnostics go to stderr.
+  local sc_output sc_rc
+  sc_output="$(shellcheck --format=gcc "${scripts[@]}" 2>/dev/null)" && sc_rc=0 || sc_rc=$?
+  if (( sc_rc == 0 )); then
+    ok "shellcheck" "hooks/*.sh + scripts/lib/*.sh — ${#scripts[@]} file(s) clean"
+  elif [[ -n "$sc_output" ]]; then
+    local line
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      error "shellcheck" "$line"
+    done <<< "$sc_output"
+  else
+    error "shellcheck" "shellcheck exited $sc_rc with no parseable output — rerun: shellcheck hooks/*.sh scripts/lib/*.sh"
+  fi
+}
+
+# --- Check scripts/lib/*.sh self-tests pass (sourced-helper integrity) ---
+# Each scripts/lib/*.sh exposes a --self-test mode (rules/script-output-conventions.md,
+# ADR-061). A defect in a sourced helper silently corrupts every script that
+# sources it, so a self-test failure is an ERROR (blocking). The libs are run
+# as a subprocess (bash "$lib" --self-test), never sourced, so validate.sh's
+# own bash-4.0 floor does not constrain the bash-3.2-safe libs. SKIP when the
+# directory is absent or empty.
+check_lib_selftests() {
+  local lib_dir="$DOTFILES_DIR/scripts/lib"
+  if [[ ! -d "$lib_dir" ]]; then
+    skip "lib-selftest" "scripts/lib/ not present — nothing to test"
+    return
+  fi
+  local libs=() f
+  while IFS= read -r f; do
+    libs+=("$f")
+  done < <(find "$lib_dir" -maxdepth 1 -name '*.sh' -type f 2>/dev/null | sort)
+  if (( ${#libs[@]} == 0 )); then
+    skip "lib-selftest" "no .sh files in scripts/lib/"
+    return
+  fi
+  local lib name out rc line
+  for lib in "${libs[@]}"; do
+    name="$(basename "$lib")"
+    out="$(bash "$lib" --self-test 2>&1)" && rc=0 || rc=$?
+    if (( rc == 0 )); then
+      ok "lib-selftest" "$name — self-tests passed"
+    else
+      error "lib-selftest" "$name — self-tests failed (exit $rc)"
+      while IFS= read -r line; do
+        [[ -n "$line" ]] && detail "$line"
+      done <<< "$out"
+    fi
+  done
+}
+
+# --- Check documentation standards ---
+check_documentation() {
+  local doc_errors=0
+  local doc_warns=0
+
+  # Heading depth and code fence checks across all .md files (exclude templates and .git)
+  while IFS= read -r md_file; do
+    [[ ! -f "$md_file" ]] && continue
+    local rel_path="${md_file#"$DOTFILES_DIR"/}"
+
+    # Skip template files — they contain intentional placeholder content
+    [[ "$rel_path" == templates/* ]] && continue
+
+    # Check heading depth
+    local line_num=0
+    while IFS= read -r line; do
+      ((line_num++)) || true
+      # Match H5+ (##### or deeper)
+      if [[ "$line" =~ ^#{5,}[[:space:]] ]]; then
+        error "docs" "$rel_path:$line_num: heading depth exceeds maximum (H5+ not permitted)"
+        ((doc_errors++)) || true
+      # Match H4 (####) — warning only
+      elif [[ "$line" =~ ^#{4}[[:space:]] ]]; then
+        warn "docs" "$rel_path:$line_num: H4 heading — consider restructuring to stay within H3 depth"
+        ((doc_warns++)) || true
+      fi
+    done < "$md_file"
+
+    # Check code fence language tags (tracks backtick count for nested fences)
+    local fence_len=0
+    line_num=0
+    while IFS= read -r line; do
+      ((line_num++)) || true
+      if [[ "$line" =~ ^(\`{3,}) ]]; then
+        local backticks="${BASH_REMATCH[1]}"
+        local blen=${#backticks}
+        local rest="${line:$blen}"
+        local rest_stripped="${rest//[[:space:]]/}"
+
+        if [[ $fence_len -eq 0 ]]; then
+          # Opening fence
+          fence_len=$blen
+          if [[ -z "$rest_stripped" ]]; then
+            warn "docs" "$rel_path:$line_num: code fence without language tag"
+            ((doc_warns++)) || true
+          fi
+        elif [[ $blen -ge $fence_len && -z "$rest_stripped" ]]; then
+          # Closing fence — at least as many backticks, nothing else on line
+          fence_len=0
+        fi
+      fi
+    done < "$md_file"
+
+    # A non-zero fence_len at EOF means a fence opened but never closed.
+    if [[ $fence_len -ne 0 ]]; then
+      warn "docs" "$rel_path: unterminated code fence (opened but not closed before EOF)"
+      ((doc_warns++)) || true
+    fi
+
+  done < <(find "$DOTFILES_DIR" -name '*.md' -not -path '*/.git/*' -not -path '*/node_modules/*' -type f)
+
+  # README.md structural checks
+  local readme="$DOTFILES_DIR/README.md"
+  if [[ -f "$readme" ]]; then
+    # Must have an H1
+    if ! grep -q '^# ' "$readme"; then
+      warn "docs" "README.md: missing H1 title"
+      ((doc_warns++)) || true
+    fi
+    # Must have at least one H2
+    if ! grep -q '^## ' "$readme"; then
+      warn "docs" "README.md: no H2 sections found"
+      ((doc_warns++)) || true
+    fi
+  fi
+
+  # CLAUDE.md structural checks
+  local claudemd="$DOTFILES_DIR/CLAUDE.md"
+  if [[ -f "$claudemd" ]]; then
+    if ! grep -q '^# ' "$claudemd"; then
+      warn "docs" "CLAUDE.md: missing H1 title"
+      ((doc_warns++)) || true
+    fi
+  fi
+
+  if [[ $doc_errors -eq 0 && $doc_warns -eq 0 ]]; then
+    ok "docs" "All documentation checks passed"
+  elif [[ $doc_errors -eq 0 ]]; then
+    ok "docs" "Documentation checks passed with $doc_warns warnings"
+  fi
+}
+
+# --- Check symlinks ---
+check_frozen_scripts() {
+  local pin_file="$DOTFILES_DIR/scripts/wim/.frozen-shas"
+
+  if [[ ! -f "$pin_file" ]]; then
+    if [[ -d "$DOTFILES_DIR/scripts/wim" ]]; then
+      error "frozen-scripts" "scripts/wim/ exists but .frozen-shas is missing"
+    fi
+    return
+  fi
+
+  # Resolve a SHA-256 tool: sha256sum (Debian baseline) or shasum -a 256 (macOS)
+  local -a sha_cmd
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha_cmd=(sha256sum)
+  elif command -v shasum >/dev/null 2>&1; then
+    sha_cmd=(shasum -a 256)
+  else
+    warn "frozen-scripts" "no SHA-256 tool (sha256sum or shasum) found — frozen-script verification skipped"
+    return
+  fi
+
+  local checked=0 mismatched=0
+  while IFS= read -r line; do
+    # Skip blank lines and comments
+    [[ -z "${line// /}" ]] && continue
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+    # Format: "<sha256>  <relative-path>" (sha256sum's two-space separator)
+    if [[ ! "$line" =~ ^([a-fA-F0-9]{64})[[:space:]]+(.+)$ ]]; then
+      error "frozen-scripts" "malformed entry in .frozen-shas: $line"
+      continue
+    fi
+    local expected="${BASH_REMATCH[1]}"
+    local relpath="${BASH_REMATCH[2]}"
+    local abspath="$DOTFILES_DIR/$relpath"
+
+    if [[ ! -f "$abspath" ]]; then
+      error "frozen-scripts" "pinned file missing: $relpath"
+      continue
+    fi
+
+    local actual
+    actual=$("${sha_cmd[@]}" "$abspath" | cut -d' ' -f1)
+    checked=$((checked + 1))
+    if [[ "$actual" != "$expected" ]]; then
+      error "frozen-scripts" "$relpath SHA-256 mismatch (expected ${expected:0:12}…, got ${actual:0:12}…) — frozen scripts must not be edited"
+      mismatched=$((mismatched + 1))
+    fi
+  done < "$pin_file"
+
+  if (( mismatched == 0 && checked > 0 )); then
+    ok "frozen-scripts" "$checked file(s) match .frozen-shas"
+  fi
+}
+
+check_symlinks() {
+  local pairs=(
+    "agents:$HOME/.claude/agents"
+    "rules:$HOME/.claude/rules"
+    "hooks:$HOME/.claude/hooks"
+    "settings.json:$HOME/.claude/settings.json"
+    "commands:$HOME/.claude/commands"
+  )
+
+  for pair in "${pairs[@]}"; do
+    local src_rel="${pair%%:*}"
+    local tgt="${pair##*:}"
+    local src="$DOTFILES_DIR/$src_rel"
+
+    if [[ ! -L "$tgt" ]]; then
+      warn "symlinks" "$tgt is not a symlink — run setup.sh"
+      continue
+    fi
+
+    local actual
+    actual="$(readlink "$tgt" 2>/dev/null || true)"
+    local expected="$src"
+
+    if [[ "$actual" != "$expected" ]]; then
+      warn "symlinks" "$tgt points to $actual, expected $expected — run setup.sh"
+    fi
+  done
+}
+
+# --- Main ---
+main() {
+  echo "Agent Framework — Validation"
+  echo "=================================="
+  echo ""
+
+  # Agents (monolithic — ADR-074)
+  echo "Agents:"
+  local agents_dir="$DOTFILES_DIR/agents"
+  if [[ -d "$agents_dir" ]]; then
+    for agent_file in "$agents_dir"/*.md; do
+      [[ ! -f "$agent_file" ]] && continue
+      check_agent "$agent_file"
+    done
+  else
+    info "No agents/ directory found"
+  fi
+  echo ""
+
+  # Agent catalog
+  echo "Agent Catalog:"
+  check_agent_catalog
+  echo ""
+
+  # README catalog
+  echo "README Catalog:"
+  check_readme_catalog
+  echo ""
+
+  # Web sync drift
+  echo "Web Sync:"
+  check_web_sync_drift
+  echo ""
+
+  # Delegation map
+  echo "Delegation Map:"
+  check_delegation_map
+  echo ""
+
+  # Relative links
+  echo "Links:"
+  check_relative_links
+  echo ""
+
+  # ADRs
+  echo "ADRs:"
+  check_adrs
+  echo ""
+
+  # Hooks
+  echo "Hooks:"
+  check_hooks
+  echo ""
+
+  echo "Shellcheck:"
+  check_shellcheck
+  echo ""
+
+  echo "Lib Self-Tests:"
+  check_lib_selftests
+  echo ""
+
+  # Documentation
+  echo "Documentation:"
+  check_documentation
+  echo ""
+
+  # Branch PR state
+  echo "Branch:"
+  check_branch_pr_state
+  echo ""
+
+  # GitHub identity
+  echo "GitHub Identity:"
+  check_gh_identity
+  echo ""
+
+  # Frozen scripts
+  echo "Frozen Scripts:"
+  check_frozen_scripts
+  echo ""
+
+  # Symlinks
+  echo "Symlinks:"
+  check_symlinks
+  echo ""
+
+  # Summary
+  echo "=================================="
+  if [[ $error_count -gt 0 ]]; then
+    echo "FAIL — $error_count errors, $warn_count warnings"
+    exit 1
+  else
+    echo "PASS — 0 errors, $warn_count warnings"
+    exit 0
+  fi
+}
+
+main

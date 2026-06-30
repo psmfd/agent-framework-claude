@@ -1,0 +1,52 @@
+name: Merge Method Check
+
+on:
+  pull_request:
+    types: [opened, edited]
+    branches: [main]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  check-merge-method:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warn on promotion PRs
+        if: github.head_ref == 'dev'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          COMMENT_MARKER="<!-- merge-method-check -->"
+
+          # Check if the comment already exists to avoid duplicates (a gh
+          # failure here aborts the step rather than risking a duplicate post)
+          existing=$(gh pr view "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json comments \
+            --jq ".comments[].body | select(contains(\"$COMMENT_MARKER\"))")
+
+          if [ -n "$existing" ]; then
+            echo "Reminder comment already exists — skipping."
+            exit 0
+          fi
+
+          gh pr comment "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "${COMMENT_MARKER}
+          ## Merge Method Reminder
+
+          This is a **release promotion** (\`dev\` → \`main\`).
+
+          Use **Create a merge commit** — do NOT use Squash and merge.
+
+          Squash merge rewrites SHAs and causes persistent merge conflicts
+          between \`dev\` and \`main\` on subsequent promotions.
+          See \`rules/github-flow.md\` for details."
+
+          # Add promotion label if it does not already exist
+          gh pr edit "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --add-label "promotion" 2>/dev/null || true

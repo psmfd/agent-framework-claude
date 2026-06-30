@@ -1,0 +1,18 @@
+# .gh-expected-identity — local-only per-developer pin for the gh-identity guard.
+#
+# Copy this file to .gh-expected-identity (which is gitignored) and add your
+# GitHub login(s), one per line. The guard then blocks a mutating gh/git push
+# whenever the active account is not in this list (strict-login mode).
+#
+# Omit the file entirely to use the accessibility fallback instead: the guard
+# verifies the active account can reach the target repo, but cannot catch a
+# wrong-but-also-authorized account in that mode.
+#
+# Find your login:        gh api user --jq .login
+# Switch active account:  gh auth switch --user <login>
+#
+# Lines starting with # and blank lines are ignored. Copying this file as-is
+# (without uncommenting a login) yields zero valid logins, so the guard fails
+# closed and tells you to fix it — replace the example below with your login.
+#
+# your-github-login

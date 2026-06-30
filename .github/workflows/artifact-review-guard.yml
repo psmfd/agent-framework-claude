@@ -1,0 +1,42 @@
+name: Artifact Review Guard
+
+# Path-based never-merge guard for the .review/ artifact handoff channel (ADR-064).
+# Fails any PR to dev whose diff adds files under .review/ other than the
+# permanent .gitkeep / README.md stubs. Runs on every PR so it can be a
+# required status check that always reports (pass/fail decided at the step
+# level — never a skipped job).
+
+on:
+  pull_request:
+    branches: [dev]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  artifact-review-guard:
+    name: artifact-review-guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Block .review/ artifacts from merging
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          # Files under .review/ in this PR's diff, excluding the permanent stubs.
+          artifacts="$(git diff --name-only "$BASE_SHA" HEAD -- '.review/**' \
+            | grep -vE '^\.review/(\.gitkeep|README\.md)$' || true)"
+
+          if [ -n "$artifacts" ]; then
+            echo "ERROR: this PR carries .review/ handoff artifacts that must not merge to dev:" >&2
+            echo "$artifacts" | sed 's/^/  /' >&2
+            echo "Delete them from the branch and push before merging (see rules/artifact-handoff.md)." >&2
+            exit 1
+          fi
+
+          echo "OK: no .review/ artifacts in the diff."

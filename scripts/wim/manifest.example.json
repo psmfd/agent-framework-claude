@@ -1,0 +1,67 @@
+{
+  "backend": "ado",
+  "ado": {
+    "organization": "https://dev.azure.com/contoso",
+    "project": "Platform",
+    "process": "agile",
+    "area": "Platform\\Backend",
+    "iteration": "Platform\\Sprint 4"
+  },
+  "github": {
+    "repo": "your-org/agent-framework",
+    "org": "your-org",
+    "default_labels": ["enhancement", "k:tooling"]
+  },
+  "epic": {
+    "title": "Authentication overhaul",
+    "description": "Replace the legacy session-cookie auth with token-based auth across all services.",
+    "tags": "auth; q3-roadmap",
+    "labels": ["epic-2026-q3"],
+    "ado": {
+      "priority": 1,
+      "business_value": 80
+    },
+    "features": [
+      {
+        "title": "Token issuance service",
+        "description": "Issue and rotate signed access tokens.",
+        "ado": { "priority": 1, "value_area": "Architectural" },
+        "stories": [
+          {
+            "title": "Issue access token on login",
+            "description": "Return a signed JWT on successful credential exchange.",
+            "acceptance_criteria": "- [ ] POST /login returns 200 with a JWT body field on valid credentials\n- [ ] JWT contains sub, exp, iat, scope claims\n- [ ] Token signature verifies against the rotating signing key\n- [ ] Failed credentials return 401 with no token in the body",
+            "ado": { "priority": 1, "story_points": 3 }
+          },
+          {
+            "title": "Rotate signing key nightly",
+            "description": "Background job rotates the JWT signing key every 24 hours.",
+            "acceptance_criteria": "- [ ] Key rotation runs at 02:00 UTC\n- [ ] Previous key is retained for 24h to validate in-flight tokens\n- [ ] Rotation is observable via the auth-service metrics dashboard",
+            "ado": { "priority": 2, "story_points": 5 }
+          }
+        ]
+      },
+      {
+        "title": "Token validation middleware",
+        "description": "Shared middleware for downstream services to validate access tokens.",
+        "ado": { "priority": 2, "value_area": "Architectural" },
+        "stories": [
+          {
+            "title": "Validate JWT on every request",
+            "description": "Reject requests with missing, expired, or invalid tokens.",
+            "acceptance_criteria": "- [ ] Missing Authorization header returns 401\n- [ ] Expired token returns 401 with WWW-Authenticate: Bearer error=\"invalid_token\"\n- [ ] Valid token populates the request user-context object",
+            "ado": { "priority": 2, "story_points": 3 }
+          }
+        ]
+      }
+    ]
+  },
+  "issues": [
+    {
+      "title": "Investigate intermittent 504 on token refresh",
+      "description": "Standalone bug filed outside the epic hierarchy — no type/* label is injected.",
+      "labels": ["bug", "p:now"],
+      "ado": { "type": "Bug", "priority": 2, "severity": "2 - High" }
+    }
+  ]
+}

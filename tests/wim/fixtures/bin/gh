@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+#
+# tests/wim/fixtures/bin/gh — minimal gh CLI shim for wim suite tests.
+#
+# State files in $WIM_TEST_STATE_DIR (default: /tmp/wim-test-state):
+#   gh-counter           next issue number to assign
+#   gh-items.json        { "<title>": { "number": N, "node_id": "...", "labels": [..] } }
+#   gh-subissues.log     newline-separated "<parent>\t<child>"
+#   gh-issuetypes.log    newline-separated "<node_id>\t<type-name>"
+#   gh-calls.log         every invocation, one line per call
+#
+
+set -euo pipefail
+
+STATE_DIR="${WIM_TEST_STATE_DIR:-/tmp/wim-test-state}"
+mkdir -p "$STATE_DIR"
+
+COUNTER_FILE="$STATE_DIR/gh-counter"
+ITEMS_FILE="$STATE_DIR/gh-items.json"
+SUBISSUES_FILE="$STATE_DIR/gh-subissues.log"
+ISSUETYPES_FILE="$STATE_DIR/gh-issuetypes.log"
+CALLS_FILE="$STATE_DIR/gh-calls.log"
+
+[[ -f "$COUNTER_FILE"    ]] || echo 100 > "$COUNTER_FILE"
+[[ -f "$ITEMS_FILE"      ]] || echo '{}' > "$ITEMS_FILE"
+[[ -f "$SUBISSUES_FILE"  ]] || : > "$SUBISSUES_FILE"
+[[ -f "$ISSUETYPES_FILE" ]] || : > "$ISSUETYPES_FILE"
+[[ -f "$CALLS_FILE"      ]] || : > "$CALLS_FILE"
+
+printf 'gh %s\n' "$*" >> "$CALLS_FILE"
+
+next_number() {
+  local n
+  n=$(< "$COUNTER_FILE")
+  echo "$((n + 1))" > "$COUNTER_FILE"
+  echo "$n"
+}
+
+flag_value() {
+  local needle="$1"; shift
+  while (( $# > 0 )); do
+    if [[ "$1" == "$needle" ]]; then
+      echo "${2:-}"
+      return 0
+    fi
+    shift
+  done
+  return 0
+}
+
+case "${1:-}" in
+  issue)
+    case "${2:-}" in
+      list)
+        shift 2
+        # gh_search_by_title sanitizes/strips operators from the --search query
+        # and treats its own jq exact-title filter as authoritative. Mirror real
+        # `gh issue list --search` (a fuzzy superset) by returning ALL stored
+        # items and letting the caller's jq do the exact match — so idempotency
+        # stays correct regardless of how the query string was sanitized.
+        jq -c 'to_entries | map({ number: .value.number, title: .key, state: "OPEN" })' "$ITEMS_FILE"
+        exit 0
+        ;;
+      create)
+        shift 2
+        title=$(flag_value --title "$@")
+        repo=$(flag_value --repo "$@")
+        number=$(next_number)
+        node_id="I_${number}"
+        # Persist
+        tmp=$(mktemp)
+        jq --arg t "$title" --argjson n "$number" --arg nid "$node_id" \
+          '. + { ($t): { "number": $n, "node_id": $nid } }' "$ITEMS_FILE" > "$tmp"
+        mv "$tmp" "$ITEMS_FILE"
+        echo "https://github.com/${repo}/issues/${number}"
+        exit 0
+        ;;
+      view)
+        shift 2
+        # First positional is URL or number; --json controls format (always emitted)
+        if [[ "${1:-}" == --json ]]; then
+          echo "gh shim: 'gh issue view --json' missing positional URL/number" >&2
+          exit 1
+        fi
+        url="$1"
+        # Extract number from URL last segment
+        num="${url##*/}"
+        node_id="I_${num}"
+        jq -nc --argjson n "$num" --arg id "$node_id" '{ number: $n, id: $id }'
+        exit 0
+        ;;
+      edit)
+        # Standalone-issue post-create edits (e.g. --add-assignee). Record + succeed.
+        exit 0
+        ;;
+    esac
+    ;;
+  api)
+    shift
+    # Skip --method (we don't differentiate by method) and -H header flags.
+    while (( $# > 0 )); do
+      case "$1" in
+        --method) shift 2 ;;
+        -H)       shift 2 ;;
+        *)        break ;;
+      esac
+    done
+    target="${1:-}"
+    if [[ "$target" == "graphql" ]]; then
+      shift
+      # Determine which mutation/query by looking for keywords in -f query=
+      query=""
+      while (( $# > 0 )); do
+        case "$1" in
+          -f) if [[ "${2:-}" == query=* ]]; then query="${2#query=}"; fi; shift 2 ;;
+          -F) shift 2 ;;
+          *)  shift ;;
+        esac
+      done
+      if [[ "$query" == *issueTypes* ]]; then
+        # Return canned issue types
+        jq -nc '{ data: { organization: { issueTypes: { nodes: [
+          { id: "IT_epic",    name: "Epic" },
+          { id: "IT_feature", name: "Feature" },
+          { id: "IT_story",   name: "User Story" }
+        ] } } } }'
+        exit 0
+      fi
+      if [[ "$query" == *updateIssue* ]]; then
+        jq -nc '{ data: { updateIssue: { issue: { number: 0, issueType: { name: "Set" } } } } }'
+        exit 0
+      fi
+      jq -nc '{ data: {} }'
+      exit 0
+    fi
+    if [[ "$target" == repos/*/issues/*/sub_issues ]]; then
+      # Extract parent number from path .../issues/N/sub_issues
+      parent=$(printf '%s' "$target" | sed -n 's#.*/issues/\([0-9][0-9]*\)/sub_issues.*#\1#p')
+      child=""
+      while (( $# > 0 )); do
+        case "$1" in
+          -F) if [[ "${2:-}" == sub_issue_id=* ]]; then child="${2#sub_issue_id=}"; fi; shift 2 ;;
+          *)  shift ;;
+        esac
+      done
+      printf '%s\t%s\n' "$parent" "$child" >> "$SUBISSUES_FILE"
+      jq -nc --argjson p "$parent" --argjson c "$child" \
+        '{ id: 1, parent_issue_number: $p, sub_issue_number: $c }'
+      exit 0
+    fi
+    if [[ "$target" =~ ^repos/[^/]+/[^/]+/issues/[0-9]+$ ]]; then
+      # Single-issue REST DB-id lookup (gh_link_subissue in _lib.sh).
+      # Real gh returns the database id; the fixture uses the issue number as a
+      # stand-in so sub-issue link assertions stay number-based. Caller passes
+      # --jq '.id', so emit the bare value.
+      echo "${target##*/}"
+      exit 0
+    fi
+    if [[ "$target" =~ ^repos/[^/]+/[^/]+$ ]]; then
+      # Plain repo accessibility probe (gh_preflight_identity in _lib.sh).
+      # GH_SHIM_DENY_REPO simulates a repo the active account cannot resolve.
+      repo_slug="${target#repos/}"
+      if [[ -n "${GH_SHIM_DENY_REPO:-}" && "$repo_slug" == "$GH_SHIM_DENY_REPO" ]]; then
+        echo "gh: Not Found (HTTP 404)" >&2
+        exit 1
+      fi
+      echo '{}'
+      exit 0
+    fi
+    echo "{}"
+    exit 0
+    ;;
+  auth|repo|label|project|milestone)
+    # Read-only or untested subcommands — succeed silently
+    echo '{}'
+    exit 0
+    ;;
+esac
+
+echo "gh shim: unhandled args: $*" >&2
+exit 99

@@ -1,0 +1,31 @@
+# gitleaks configuration for agent-framework-claude
+# Consumed by the CI secrets-scan workflow (ADR-078).
+#
+# This framework's own guard scripts and documentation legitimately contain
+# secret-DETECTION regexes and illustrative token prefixes (e.g. AKIA…, ghp_…,
+# example PEM headers). Those are not real secrets; they are allowlisted by path
+# below so the scanner does not self-flag. Keep this list as TIGHT as possible —
+# allowlist only files whose purpose is to document or detect secret patterns,
+# never to suppress a genuine finding.
+
+title = "agent-framework-claude"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Framework files that legitimately contain secret-pattern examples or detection regexes"
+paths = [
+  # Guard implementations carry the detection pattern set
+  '''hooks/secrets-guard\.sh''',
+  '''hooks/session-secrets-guard\.sh''',
+  # Rule + ADRs that document the pattern set
+  '''rules/secrets-guard\.md''',
+  '''adrs/0(47|53|57|59)-.*\.md''',
+  # Test fixtures and scaffolding templates
+  '''tests/.*''',
+  '''.*\.example$''',
+  '''.*\.sample$''',
+  '''.*\.template$''',
+  '''.*\.j2$''',
+]

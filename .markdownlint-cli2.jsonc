@@ -1,0 +1,29 @@
+{
+  // markdownlint-cli2 configuration for the agent-framework repo.
+  // Tuned to the project's documentation standards (standards/documentation.md):
+  // terse declarative prose with long lines, compact tables, and skill-body
+  // fragments. Rules that fire en masse on intentional house style are disabled
+  // so lint output surfaces real issues, not style preferences.
+  "config": {
+    "default": true,
+    // Long declarative lines are the house style (terse, no hard wrap).
+    "MD013": false,
+    // Compact pipe tables (|---|---|) are the house style.
+    "MD060": false,
+    // Unordered-list marker style is mixed across the corpus; not normalizing.
+    "MD004": false,
+    // SKILL.md bodies legitimately open with `##` (they are injected fragments,
+    // not standalone documents with an H1 title).
+    "MD041": false,
+    // Code spans frequently carry regexes/patterns with intentional spaces
+    // (e.g. a PEM-header regex), which this rule misreads.
+    "MD038": false,
+    // Emphasis-marker check false-positives on wildcards like `System.*`.
+    "MD037": false,
+    // Repeated subheadings under different parents are intentional (ADR option
+    // blocks, skill reference sections); only flag true sibling duplicates.
+    "MD024": { "siblings_only": true }
+  },
+  "globs": ["**/*.md"],
+  "ignores": ["node_modules", ".git"]
+}
