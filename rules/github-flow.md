@@ -66,7 +66,7 @@ Branch protection is enforced through **repository Rulesets** (not classic branc
 - Require linear history
 - Block force pushes
 - Block branch deletion
-- Required status checks: `validate`, `lint-pr-title`, `artifact-review-guard`, `secrets-scan` — `artifact-review-guard` blocks `.review/` handoff artifacts from merging (see `rules/artifact-handoff.md` and ADR-064); `secrets-scan` runs gitleaks (ADR-078)
+- Required status checks: `validate`, `lint-pr-title`, `artifact-review-guard`, `secrets-scan`, `zizmor`, `codeql`, `tests`, `bash32-compat` — `artifact-review-guard` blocks `.review/` handoff artifacts from merging (see `rules/artifact-handoff.md` and ADR-064); `secrets-scan` runs gitleaks (ADR-078); `zizmor` and `codeql` scan the workflows themselves (ADR-081); `tests` runs every `tests/*/run-tests.sh` suite and `bash32-compat` verifies the bash 3.2 floor on a macOS runner (ADR-083)
 
 ### `main` branch (ruleset `protect-main`)
 
