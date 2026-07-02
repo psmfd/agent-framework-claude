@@ -256,6 +256,7 @@ The script checks:
 - Active `gh` account can resolve the `origin` repository (warns on mismatch) — guards against the wrong identity on multi-account hosts. Skipped when `GH_TOKEN`/`GITHUB_TOKEN` is set or the remote is not `github.com`. See ADR-052/ADR-054 and `docs/multi-account-git-identity.md`.
 - Hook and shared-lib scripts pass `shellcheck` (`hooks/*.sh` and `scripts/lib/*.sh`) — security-critical guards and sourced helpers must be statically clean; findings are errors (resolve a genuine false positive with a reviewed inline `# shellcheck disable=SCxxxx`). Skipped (non-fatal) when `shellcheck` is not installed.
 - Shared-lib self-tests pass (`scripts/lib/*.sh --self-test`) — each sourced helper module is run as a subprocess and must exit 0; a failure is an error. Skipped when `scripts/lib/` is absent or empty. See ADR-061.
+- Hook-pair lockstep (errors on drift) — the deliberately duplicated `SECRET_PATTERNS` (secrets-guard pair) and identity-helper functions (`sanitize`, `is_valid_login`, `parse_owner_repo`, `GH_LOGIN_RE`; gh-identity pair) must stay byte-identical across their two hooks. The extractor errors loudly when a target is not found in its expected shape rather than silently passing. See ADR-083.
 
 ## Documentation Sync Map
 

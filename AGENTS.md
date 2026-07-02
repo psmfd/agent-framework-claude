@@ -26,9 +26,18 @@ This repo has no build or runtime — it is a distribution of Markdown agents/ru
 VALIDATE_VERBOSE=1 ./validate.sh   # per-warning detail lines
 
 # Bash test suites (plain-bash harnesses: exit 0 PASS, 1 FAIL)
-tests/secrets-guard/run-tests.sh   # secrets-guard.sh staged-blob regression (ADR-059)
-tests/wim/run-tests.sh             # end-to-end work-item scripts via CLI shims
-tests/worktree-guard/run-tests.sh  # worktree-create.sh symlink containment (ADR-070)
+tests/secrets-guard/run-tests.sh            # secrets-guard.sh staged-blob regression (ADR-059)
+tests/session-secrets-guard/run-tests.sh    # session-secrets-guard.sh PreToolUse contract (ADR-053)
+tests/gh-identity-guard/run-tests.sh        # gh-identity-guard.sh pre-push identity ladder (ADR-054)
+tests/session-gh-identity-guard/run-tests.sh # session-gh-identity-guard.sh PreToolUse contract
+tests/bash-destructive-guard/run-tests.sh   # bash-destructive-guard.sh command classifier
+tests/validate/run-tests.sh                 # validate.sh clone-and-mutate regression (bash 4+)
+tests/wim/run-tests.sh                      # end-to-end work-item scripts via CLI shims
+tests/worktree-guard/run-tests.sh           # worktree-create.sh symlink containment (ADR-070)
+
+# Bash 3.2 floor check — runs the 3.2-targeted scripts under a real 3.2 binary
+# (macOS /bin/bash); SKIPs on hosts without one. CI runs it on macOS (ADR-083).
+scripts/check-bash32.sh
 
 # Shared shell-lib self-tests (also gated by validate.sh)
 scripts/lib/log.sh --self-test
@@ -214,4 +223,4 @@ Run before every push (enforced by the pre-push hook installed by `setup.sh`):
 ./validate.sh
 ```
 
-This checks: monolithic agent validation (frontmatter presence, `disable-model-invocation: true`, body present), agent catalog drift (via `scripts/regen-agent-catalog.sh --check` — AGENTS.md canonical: name presence vs `agents/*.md`, Domain/Use-when parity in the routing mirror `rules/agent-first-selection.md`, README Tier/Model), `Bash` tool allowlist (only ADR-069-listed agents may carry it; enforced by `CLAUDE_BASH_ALLOWED`), README Agents/Rules consistency (Current Agents/Rules vs files on disk), `web/instructions.md` Agent Catalog sync drift (presence and manifest pairs against `origin/dev` diff; override via `Web-Sync-Skip: <reason>` trailer), ADR validation (sequential numbering; gaps now allowed), hooks and symlinks, hook and shared-lib shellcheck linting (`hooks/*.sh` and `scripts/lib/*.sh`; errors on findings, skipped when shellcheck is absent), shared-lib self-tests (`scripts/lib/*.sh --self-test` run as subprocesses; ADR-061), relative markdown link resolution (superseded ADRs exempt — their bodies are frozen per the supersession-not-editing rule), documentation standards (heading depth, code fence tags), branch/PR state, and GitHub identity (warns when the active `gh` account cannot resolve the `origin` repo on multi-account hosts; skipped under `GH_TOKEN`/`GITHUB_TOKEN` or non-`github.com` remotes).
+This checks: monolithic agent validation (frontmatter presence, `disable-model-invocation: true`, body present), agent catalog drift (via `scripts/regen-agent-catalog.sh --check` — AGENTS.md canonical: name presence vs `agents/*.md`, Domain/Use-when parity in the routing mirror `rules/agent-first-selection.md`, README Tier/Model), `Bash` tool allowlist (only ADR-069-listed agents may carry it; enforced by `CLAUDE_BASH_ALLOWED`), README Agents/Rules consistency (Current Agents/Rules vs files on disk), `web/instructions.md` Agent Catalog sync drift (presence and manifest pairs against `origin/dev` diff; override via `Web-Sync-Skip: <reason>` trailer), ADR validation (sequential numbering; gaps now allowed), hooks and symlinks, hook and shared-lib shellcheck linting (`hooks/*.sh` and `scripts/lib/*.sh`; errors on findings, skipped when shellcheck is absent), shared-lib self-tests (`scripts/lib/*.sh --self-test` run as subprocesses; ADR-061), hook-pair lockstep (the duplicated secret-pattern set and identity-helper functions must stay byte-identical across their hook pairs; errors on drift; ADR-083), relative markdown link resolution (superseded ADRs exempt — their bodies are frozen per the supersession-not-editing rule), documentation standards (heading depth, code fence tags), branch/PR state, and GitHub identity (warns when the active `gh` account cannot resolve the `origin` repo on multi-account hosts; skipped under `GH_TOKEN`/`GITHUB_TOKEN` or non-`github.com` remotes).
