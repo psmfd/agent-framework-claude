@@ -1,21 +1,20 @@
 #!/usr/bin/env bash
-# Agent Framework — Agent Catalog Drift Gate / Regenerator
+# Agent Framework — Agent Catalog Drift Gate
 #
-# AGENTS.md "Available Agents" is the canonical source for each agent's
-# Tier / Domain / Use-when. This script keeps the downstream catalogs
-# consistent with it (see ADR-062):
+# AGENTS.md "Available Agents" is the canonical (and only always-loaded)
+# catalog for each agent's Tier / Domain / Use-when (ADR-062; the generated
+# routing mirror in rules/agent-first-selection.md was retired by ADR-085 —
+# that rule now carries a pointer instead of a table copy).
 #
 #   --check  (default)  Detect drift; write nothing; exit non-zero on drift.
 #                       Wired into validate.sh as a blocking check.
-#   --write             Regenerate the same-schema routing mirror
-#                       (rules/agent-first-selection.md)
-#                       from AGENTS.md, in place (order-preserving merge).
 #   -h, --help          Print this help and exit.
 #
 # What --check verifies (keyed by agent name):
 #   - every AGENTS.md agent has agents/<name>.md            (error if missing)
 #   - every agents/<name>.md appears in AGENTS.md           (warn if missing)
-#   - Domain + Use-when match across AGENTS.md and the routing mirror   (error)
+#   - rules/agent-first-selection.md carries NO catalog table (a reintroduced
+#     mirror is drift) and still points at AGENTS.md         (error)
 #   - README "Current Agents" Tier matches AGENTS.md, and Model matches each
 #     wrapper's `model:` frontmatter                        (error on drift)
 #
@@ -23,8 +22,8 @@
 # web/instructions.md Agent Catalog (condensed; covered by the web-sync check).
 #
 # Exit codes:
-#   0  no drift (--check) / regenerated cleanly (--write)
-#   1  drift detected (--check) / write failed
+#   0  no drift
+#   1  drift detected
 #   2  environment / precondition failure
 
 set -euo pipefail
@@ -44,10 +43,9 @@ usage() {
   ' "$0"
 }
 
-MODE="check"
 case "${1:-}" in
-  --check|"") MODE="check" ;;
-  --write)    MODE="write" ;;
+  --check|"") : ;;
+  --write)    printf -- '--write was retired with the routing mirror (ADR-085); AGENTS.md is edited by hand and gated by --check\n' >&2; exit 2 ;;
   -h|--help)  usage; exit 0 ;;
   *)          printf 'Unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
 esac
@@ -99,63 +97,6 @@ if [ ! -s "$CANON" ]; then
   fatal "catalog" "no agent rows parsed from AGENTS.md — check the 'Available Agents' table header" 2
 fi
 
-# --- WRITE MODE -------------------------------------------------------------
-# Order-preserving merge: refresh each routing row's Domain+Use-when from the
-# canonical map, keyed by name; append canonical agents missing from the file;
-# drop (with a warning) rows whose agent is absent from AGENTS.md.
-write_routing() {
-  local file="$1" label="$2"
-  [ -f "$file" ] || { warn "$label" "not found: $file"; return; }
-  local out="$file.regen.$$"
-  awk -F'\t' -v canon="$CANON" '
-    function trim(s){ sub(/^[ \t\r]+/,"",s); sub(/[ \t\r]+$/,"",s); return s }
-    BEGIN{
-      while ((getline line < canon) > 0) {
-        nf=split(line, a, "\t"); cdom[a[1]]=a[3]; cuw[a[1]]=a[4]; seenc[a[1]]=1
-        order[++n]=a[1]
-      }
-      close(canon)
-    }
-    # passthrough until table header
-    st==0 && /^\| Agent \| Domain \| Use when \|/ { print; st=1; next }
-    st==1 && /^\|[[:space:]]*-/ { print; st=2; next }
-    st==2 && (/^[[:space:]]*$/ || /^#/) {
-      # flush canonical agents not already emitted, in canonical order
-      for (i=1;i<=n;i++){ nm=order[i]; if(!(nm in emitted)) printf "| `%s` | %s | %s |\n", nm, cdom[nm], cuw[nm] }
-      print; st=3; next
-    }
-    st==2 {
-      line=$0; nfields=split(line, c, "|"); nm=trim(c[2]); gsub(/`/,"",nm)
-      if (nm in seenc) { printf "| `%s` | %s | %s |\n", nm, cdom[nm], cuw[nm]; emitted[nm]=1 }
-      else { print "DROP\t" nm > "/dev/stderr" }   # stray row: drop + signal
-      next
-    }
-    { print }
-    END {
-      if (st==2) { for (i=1;i<=n;i++){ nm=order[i]; if(!(nm in emitted)) printf "| `%s` | %s | %s |\n", nm, cdom[nm], cuw[nm] } }
-    }
-  ' "$file" > "$out" 2> "$WORK/dropped.$$" || { rm -f "$out"; err "$label" "awk regen failed"; return; }
-
-  while IFS=$'\t' read -r tag nm; do
-    [ "$tag" = "DROP" ] && warn "$label" "dropped stray row '$nm' (not in AGENTS.md)"
-  done < "$WORK/dropped.$$"
-
-  if cmp -s "$file" "$out"; then
-    ok "$label" "already in sync with AGENTS.md"
-    rm -f "$out"
-  else
-    mv "$out" "$file"
-    info "[$label] regenerated from AGENTS.md (canonical)"
-  fi
-}
-
-if [ "$MODE" = "write" ]; then
-  write_routing "$ROUTING_RULE"    "routing-rule"
-  info "README and web/instructions.md are intentionally divergent — not regenerated (run --check to verify Tier/Model)"
-  print_summary
-  exit $?
-fi
-
 # --- CHECK MODE -------------------------------------------------------------
 
 # Presence: AGENTS.md names vs agents/*.md wrapper files.
@@ -184,31 +125,23 @@ while IFS= read -r nm; do
   grep -qxF "$nm" "$canon_names" || warn "catalog" "agents/${nm}.md exists but is not listed in AGENTS.md"
 done < "$wrapper_names"
 
-# Routing mirrors: name-presence + Domain/Use-when content parity.
-check_routing() {
+# Routing rule: must carry the pointer to AGENTS.md, not a table copy.
+# A reintroduced '| Agent | Domain | Use when |' table is the drift this
+# guards against (ADR-085 retired the generated mirror).
+check_routing_pointer() {
   local file="$1" label="$2"
-  [ -f "$file" ] || { err "$label" "routing catalog not found: $file"; return; }
-  local subj="$WORK/${label}.tsv"
-  extract_body "$file" '| Agent | Domain | Use when |' | cells_tsv \
-    | awk -F'\t' '{ n=$1; gsub(/`/,"",n); print n "\t" $2 "\t" $3 }' > "$subj"
-  awk -F'\t' -v canon="$CANON" -v label="$label" '
-    BEGIN{ while ((getline l < canon)>0){ split(l,a,"\t"); cdom[a[1]]=a[3]; cuw[a[1]]=a[4]; cseen[a[1]]=1 } close(canon) }
-    { rdom[$1]=$2; ruw[$1]=$3; rseen[$1]=1 }
-    END{
-      for (n in cseen){
-        if(!(n in rseen)){ print "ERR\t" label "\t" n " missing from routing catalog"; continue }
-        if(cdom[n]!=rdom[n]) print "ERR\t" label "\t" n " Domain drift: AGENTS.md=[" cdom[n] "] catalog=[" rdom[n] "]"
-        if(cuw[n]!=ruw[n])   print "ERR\t" label "\t" n " Use-when drift vs AGENTS.md"
-      }
-      for (n in rseen) if(!(n in cseen)) print "ERR\t" label "\t" n " listed in routing catalog but not in AGENTS.md"
-    }' "$subj" > "$WORK/${label}.drift"
-  # Read in the current shell (not a pipe subshell) so err() counters propagate.
-  LC_ALL=C sort "$WORK/${label}.drift" > "$WORK/${label}.drift.sorted"
-  while IFS=$'\t' read -r tag lbl msg; do
-    [ -n "$tag" ] && err "$lbl" "$msg"
-  done < "$WORK/${label}.drift.sorted"
+  [ -f "$file" ] || { err "$label" "routing rule not found: $file"; return; }
+  if grep -q '^| Agent | Domain | Use when |' "$file"; then
+    err "$label" "catalog table reintroduced in ${file##*/} — the mirror was retired (ADR-085); AGENTS.md is the only catalog copy"
+    return
+  fi
+  if ! grep -q 'Available Agents' "$file"; then
+    err "$label" "${file##*/} no longer points at AGENTS.md's Available Agents table — restore the pointer (ADR-085)"
+    return
+  fi
+  ok "$label" "pointer to AGENTS.md present; no table copy"
 }
-check_routing "$ROUTING_RULE"    "routing-rule"
+check_routing_pointer "$ROUTING_RULE" "routing-rule"
 
 # README "Current Agents": Tier vs canonical, Model vs wrapper frontmatter.
 if [ -f "$README_MD" ]; then

@@ -403,11 +403,10 @@ check_gh_identity() {
 
 # --- Check agent catalog in AGENTS.md ---
 check_agent_catalog() {
-  # Delegates to the canonical drift gate (ADR-062). scripts/regen-agent-catalog.sh
-  # --check owns what the former inline checks did (name presence vs agents/*.md
-  # and routing-mirror parity) PLUS column-content drift: Domain/Use-when across
-  # AGENTS.md and the routing mirror (rules/agent-first-selection.md), and README
-  # Tier/Model. AGENTS.md is the canonical source.
+  # Delegates to the canonical drift gate (ADR-062, mirror retired by ADR-085).
+  # scripts/regen-agent-catalog.sh --check verifies name presence vs agents/*.md,
+  # that rules/agent-first-selection.md carries the AGENTS.md pointer (and no
+  # reintroduced table copy), and README Tier/Model. AGENTS.md is canonical.
   local script="$DOTFILES_DIR/scripts/regen-agent-catalog.sh"
   if [[ ! -x "$script" ]]; then
     warn "catalog" "scripts/regen-agent-catalog.sh missing or not executable — skipping catalog drift check"
@@ -423,11 +422,11 @@ check_agent_catalog() {
   done < <(printf '%s\n' "$out" | sed -n 's/^WARN  \[[^]]*\] //p')
 
   if [[ $rc -eq 0 ]]; then
-    ok "catalog" "Agent catalog consistent (AGENTS.md canonical; routing mirror + README tier/model checked)"
+    ok "catalog" "Agent catalog consistent (AGENTS.md canonical; routing pointer + README tier/model checked)"
   else
     # Surface the drift detail (stderr, per output conventions), fold into one error.
     printf '%s\n' "$out" | grep '^ERROR' >&2 || true
-    error "catalog" "Agent catalog drift — run: scripts/regen-agent-catalog.sh --write (README tier/model fixed by hand)"
+    error "catalog" "Agent catalog drift — AGENTS.md is canonical; fix it (and README tier/model) by hand, see scripts/regen-agent-catalog.sh --check output"
   fi
 }
 

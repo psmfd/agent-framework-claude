@@ -89,7 +89,7 @@ Use `scripts/scaffold.sh agent <name>` to create `agents/<name>.md` from the tem
 
 1. Fill in the agent's expertise, tool list, model, and all behavioral guidance in the scaffolded `agents/<name>.md`.
 
-2. Add a catalog row to `AGENTS.md`, a table row to the README "Current Agents" section, a routing row in `rules/agent-first-selection.md`, and a row in the `web/instructions.md` Agent Catalog table.
+2. Add a catalog row to `AGENTS.md` (the canonical catalog — `rules/agent-first-selection.md` carries only a pointer, ADR-085), a table row to the README "Current Agents" section, and a row in the `web/instructions.md` Agent Catalog table.
 
 3. Update the README directory tree — add `agents/<name>.md` and any files added to `hooks/`, `scripts/`, `templates/`, or `adrs/`.
 
@@ -247,7 +247,7 @@ The script checks:
 - `disable-model-invocation: true` is present on all agent files
 - Execution-tool policy — `Bash` only on agents in `CLAUDE_BASH_ALLOWED` (ADR-069)
 - Symlinks from `~/.claude/` point to the correct targets
-- Agent catalog drift (via `scripts/regen-agent-catalog.sh --check`, ADR-062): `AGENTS.md` is canonical — name presence vs `agents/*.md` (bidirectional), Domain/Use-when parity across `AGENTS.md` and the routing mirror (`rules/agent-first-selection.md`), and README Tier vs `AGENTS.md` / README Model vs agent `model:` frontmatter; content drift is an error (fix mirrors with `--write`)
+- Agent catalog drift (via `scripts/regen-agent-catalog.sh --check`, ADR-062/ADR-085): `AGENTS.md` is canonical — name presence vs `agents/*.md` (bidirectional), `rules/agent-first-selection.md` carries the AGENTS.md pointer and no reintroduced table copy, and README Tier vs `AGENTS.md` / README Model vs agent `model:` frontmatter; drift is an error (fix `AGENTS.md`/README by hand)
 - Agent delegation references resolve to real agent files
 - Relative markdown links in all `.md` files resolve to existing targets (superseded ADRs are exempt — their bodies are frozen per the supersession-not-editing rule and may reference files removed by the superseding ADR)
 - Markdown documentation standards (no H5+ headings, no language-less code fences)
@@ -274,14 +274,14 @@ When changing one file in a pair, the partner must be updated in the same commit
 | `README.md` (directory tree) | actual files on disk | Tree listing must reflect actual `hooks/`, `scripts/`, `templates/`, `adrs/` contents |
 | `commands/*.md` | `setup.sh` (`CLAUDE_LINKS`) + `validate.sh` (`check_symlinks` pairs) | A new command artifact type must be symlinked into `~/.claude/commands/` and registered in the symlink-pair check |
 | `AGENTS.md` (agent table) | `agents/` directory | Bidirectional name presence — checked by `check_agent_catalog()` (delegates to `scripts/regen-agent-catalog.sh --check`, ADR-062) |
-| `AGENTS.md` (Tier/Domain/Use-when) | `rules/agent-first-selection.md` | `AGENTS.md` canonical; regenerate mirror with `scripts/regen-agent-catalog.sh --write`; `--check` gates Domain/Use-when drift (error). README Tier/Model also checked; README Description + web catalog intentionally divergent (ADR-062) |
+| `AGENTS.md` (Tier/Domain/Use-when) | `rules/agent-first-selection.md` (pointer only) | `AGENTS.md` canonical; the rule carries a pointer, not a copy (ADR-085) — `--check` errors if a table is reintroduced there. README Tier/Model also checked; README Description + web catalog intentionally divergent (ADR-062) |
 | `AGENTS.md` (Validation) | `validate.sh` check list | Narrative description must reflect current checks |
 | `CONTRIBUTING.md` (Validation) | `validate.sh` check list | New checks must be documented; removed checks must be de-listed |
 | `CONTRIBUTING.md` (Adding a New Agent) | `.github/PULL_REQUEST_TEMPLATE.md` | Step list and PR checklist must cover the same required actions |
 | `CONTRIBUTING.md` (Adding a New Rule) | `.github/PULL_REQUEST_TEMPLATE.md` | Same as above for rules |
 | `scripts/wim/<script>.sh` | `scripts/wim/.frozen-shas` | Frozen scripts under `scripts/wim/` are SHA-pinned. Any legitimate re-authoring must update the corresponding pin entry in the same commit, or `validate.sh check_frozen_scripts` errors. See ADR-050. |
 | `scripts/wim/` (any change) | `agents/work-item-management-expert.md` `## Frozen Work-Item Scripts` and `## Script Workflow` sections | Adding or removing a frozen script, renaming the manifest file, or changing the driver's invocation contract must propagate to the agent file so the constraint and operational flow stay accurate. |
-| `AGENTS.md` (agent table) and matching row in `rules/agent-first-selection.md` | `web/instructions.md` (Agent Catalog table) | Catalog row edits (description, domain, use-when text) propagate so web-session users see the same routing reference |
+| `AGENTS.md` (agent table) | `web/instructions.md` (Agent Catalog table) | Catalog row edits (description, domain, use-when text) propagate so web-session users see the same routing reference |
 | `rules/<name>.md` (rules mirrored in the distillate — orchestrator-protocol, plan-before-code, agent-first-selection, research-parallelism, consensus-by-replication, github-flow, conventional-commits, semver-tagging, pr-template-standard, adr-required, debian-baseline, post-implementation-review, structured-review-format, no-mcp-servers, secrets-guard, gh-identity-guard, script-output-conventions) | `web/instructions.md` (matching section) | Substantive rule edits propagate to the matching section. Editorial tweaks that do not change semantics are not required to propagate. |
 | `AGENTS.md` (Orchestrator Protocol, Development Conventions, Security Policies) | `rules/<name>.md` (the canonical rule each pointer names) | Pointer text only (ADR-085) — keep the pointer accurate when a rule is renamed/added/removed; substantive changes live in the rule and propagate to `web/instructions.md` via the row above |
 
