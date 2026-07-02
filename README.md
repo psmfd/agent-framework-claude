@@ -79,6 +79,7 @@ agent-framework-claude/
 │   │   ├── log.sh                # Output helpers + fatal/print_summary; --self-test
 │   │   └── git.sh                # git_repo_root; --self-test
 │   ├── check-bash32.sh    # Runs 3.2-targeted scripts under a real bash 3.2 binary (ADR-083)
+│   ├── check-pin-drift.sh # Detects stale workflow-embedded container digest pins (#15)
 │   ├── rulesets.sh        # Ruleset-as-code: --check/--apply/--pull vs rulesets/*.json (ADR-086)
 │   ├── scaffold.sh        # Scaffolds new agent or rule from templates
 │   ├── setup-repo.sh      # Repo initialization helper
