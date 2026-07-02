@@ -16,7 +16,7 @@ permissions:
 jobs:
   lint-pr-title:
     name: lint-pr-title
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # SHA-pinned per ADR-055 (third-party actions pinned to immutable commit SHA).
       # SHA = tag v6.1.1; bump the SHA and the comment together when upgrading.
