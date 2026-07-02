@@ -874,7 +874,10 @@ check_hooks() {
 # when shellcheck is not installed so CI/dev without it is not blocked.
 check_shellcheck() {
   if ! command -v shellcheck >/dev/null 2>&1; then
-    skip "shellcheck" "shellcheck not installed — skipping shell-script lint (install to enable)"
+    # WARN, not SKIP: CI runners ship shellcheck, so a host without it can
+    # pass pre-push on a change CI will reject. Same missing-tool posture as
+    # check_frozen_scripts. Install: brew/apt install shellcheck.
+    warn "shellcheck" "shellcheck not installed — lint skipped locally but ENFORCED in CI (install to close the gap)"
     return
   fi
   local scripts=() f
@@ -1103,6 +1106,83 @@ check_lockstep_duplication() {
   lockstep_compare func parse_owner_repo "$ident_a" "$ident_b"
 }
 
+# --- Check ruleset required-checks vs workflow job names (ADR-086) ---
+# Fully offline: cross-checks the committed rulesets/*.json (normalized by
+# scripts/rulesets.sh — one key per line, so a line-scan is reliable) against
+# the effective status-check names of .github/workflows/*.yml jobs (the job's
+# name: field, falling back to the job id). Catches the "renamed job turns a
+# required check into a never-reporting context that blocks every merge"
+# failure BEFORE it reaches live state. Live-vs-committed drift is the
+# network-dependent sibling check owned by scripts/rulesets.sh --check.
+check_ruleset_job_drift() {
+  local rulesets_dir="$DOTFILES_DIR/rulesets"
+  local wf_dir="$DOTFILES_DIR/.github/workflows"
+  if [[ ! -d "$rulesets_dir" ]]; then
+    skip "rulesets" "rulesets/ not present — ruleset-as-code not adopted, drift check skipped"
+    return
+  fi
+
+  # Effective check names: job name: if present, else job id.
+  local job_names
+  job_names="$(awk '
+    FNR==1 { if (job != "") print (jobname != "" ? jobname : job); job=""; jobname=""; in_jobs=0 }
+    /^jobs:/ { in_jobs=1; next }
+    in_jobs && /^[A-Za-z]/ { if (job != "") print (jobname != "" ? jobname : job); job=""; jobname=""; in_jobs=0 }
+    in_jobs && /^  [A-Za-z0-9_-]+:[[:space:]]*$/ {
+      if (job != "") print (jobname != "" ? jobname : job)
+      job=$0; sub(/^  /,"",job); sub(/:.*/,"",job); jobname=""
+      next
+    }
+    in_jobs && /^    name:[[:space:]]/ {
+      jobname=$0; sub(/^    name:[[:space:]]*/,"",jobname); gsub(/^"|"$/,"",jobname); next
+    }
+    END { if (job != "") print (jobname != "" ? jobname : job) }
+  ' "$wf_dir"/*.yml 2>/dev/null | sort -u)"
+
+  if [[ -z "$job_names" ]]; then
+    error "rulesets" "no workflow jobs parsed from .github/workflows/*.yml — extractor cannot verify required checks"
+    return
+  fi
+
+  local f name ctx contexts had_issue=0
+  for f in "$rulesets_dir"/*.json; do
+    [[ -f "$f" ]] || continue
+    name="$(basename "$f")"
+    contexts="$(grep -oE '"context": *"[^"]+"' "$f" | sed -E 's/"context": *"([^"]+)"/\1/')"
+    if [[ -z "$contexts" ]] && grep -q 'required_status_checks' "$f"; then
+      error "rulesets" "$name: required_status_checks present but no contexts parsed — regenerate via scripts/rulesets.sh --pull"
+      had_issue=1
+      continue
+    fi
+    while IFS= read -r ctx; do
+      [[ -z "$ctx" ]] && continue
+      if ! grep -qxF "$ctx" <<< "$job_names"; then
+        error "rulesets" "$name: required check '$ctx' matches no workflow job — a rename or removal will silently block every merge"
+        had_issue=1
+      fi
+    done <<< "$contexts"
+  done
+
+  # Inverse: jobs not required by any committed ruleset (informational).
+  # Deliberately-unrequired jobs are allowlisted so this WARN only fires on
+  # NEW unrequired jobs: release runs on main pushes (not a PR check);
+  # check-merge-method posts an advisory comment on promotion PRs by design.
+  local unrequired_ok=" release check-merge-method check-pins "
+  local all_contexts job
+  all_contexts="$(grep -hoE '"context": *"[^"]+"' "$rulesets_dir"/*.json 2>/dev/null | sed -E 's/"context": *"([^"]+)"/\1/' | sort -u)"
+  while IFS= read -r job; do
+    [[ -z "$job" ]] && continue
+    [[ "$unrequired_ok" == *" $job "* ]] && continue
+    if ! grep -qxF "$job" <<< "$all_contexts"; then
+      warn "rulesets" "job '$job' is not required as a status check by any committed ruleset — confirm this is intentional (allowlist in check_ruleset_job_drift if so)"
+    fi
+  done <<< "$job_names"
+
+  if [[ $had_issue -eq 0 ]]; then
+    ok "rulesets" "all required-check contexts map to workflow jobs"
+  fi
+}
+
 # --- Check symlinks ---
 check_frozen_scripts() {
   local pin_file="$DOTFILES_DIR/scripts/wim/.frozen-shas"
@@ -1252,6 +1332,10 @@ main() {
 
   echo "Lockstep:"
   check_lockstep_duplication
+  echo ""
+
+  echo "Rulesets:"
+  check_ruleset_job_drift
   echo ""
 
   # Documentation

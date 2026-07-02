@@ -79,6 +79,7 @@ agent-framework-claude/
 │   │   ├── log.sh                # Output helpers + fatal/print_summary; --self-test
 │   │   └── git.sh                # git_repo_root; --self-test
 │   ├── check-bash32.sh    # Runs 3.2-targeted scripts under a real bash 3.2 binary (ADR-083)
+│   ├── rulesets.sh        # Ruleset-as-code: --check/--apply/--pull vs rulesets/*.json (ADR-086)
 │   ├── scaffold.sh        # Scaffolds new agent or rule from templates
 │   ├── setup-repo.sh      # Repo initialization helper
 │   ├── regen-agent-catalog.sh  # Agent catalog drift gate (--check) + routing-mirror regen (--write); ADR-062
@@ -95,10 +96,15 @@ agent-framework-claude/
 ├── templates/             # Scaffolding templates
 │   ├── agent/             # Monolithic agent template
 │   └── rule/              # rule.md template
+├── rulesets/              # Committed branch-protection ruleset state (ADR-086)
+│   ├── protect-dev.json           # Desired state for the dev ruleset (normalized)
+│   ├── protect-main.json          # Desired state for the main ruleset (normalized)
+│   └── README.md                  # Normalization contract + workflow
 ├── tests/                 # Test suites for project tooling (each suite: run-tests.sh, exit 0 PASS / 1 FAIL)
 │   ├── fixtures/bin/gh    # Deterministic gh shim shared by the identity-guard suites (ADR-083)
 │   ├── bash-destructive-guard/    # hooks/bash-destructive-guard.sh — compound/wrapper/find/safe-path cases
 │   ├── gh-identity-guard/         # hooks/gh-identity-guard.sh — pre-push identity ladder (ADR-054)
+│   ├── rulesets/          # scripts/rulesets.sh — normalization + apply-rail fixtures (ADR-086)
 │   ├── secrets-guard/     # hooks/secrets-guard.sh — staged-blob bypass tests (ADR-059)
 │   ├── session-gh-identity-guard/ # hooks/session-gh-identity-guard.sh — PreToolUse JSON contract
 │   ├── session-secrets-guard/     # hooks/session-secrets-guard.sh — PreToolUse JSON contract (ADR-053)

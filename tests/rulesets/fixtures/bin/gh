@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+#
+# Deterministic gh shim for tests/rulesets/run-tests.sh — no network, no auth.
+# Distinct from tests/fixtures/bin/gh (the hook-test shim, which models a
+# different, smaller set of invocations); this one mirrors the exact argv
+# shapes scripts/rulesets.sh emits. Prepend tests/rulesets/fixtures/bin to
+# PATH so rulesets.sh resolves this instead of real gh.
+#
+# Controlled via environment variables:
+#   FAKE_GH_REPO                  output of `gh repo view --json nameWithOwner
+#                                  --jq .nameWithOwner`; fails if unset
+#   FAKE_GH_RULESETS_LIST_OUTPUT  file of pre-computed "id<TAB>name" lines,
+#                                  cat'd for `gh api repos/<repo>/rulesets
+#                                  --jq '...'` (the live index listing)
+#   FAKE_GH_RULESETS_DIR          dir of "<id>.json" raw GET-shaped bodies,
+#                                  cat'd for `gh api repos/<repo>/rulesets/<id>`
+#   FAKE_GH_CALLS_LOG             file appended "METHOD<TAB>URL<TAB>INPUT" for
+#                                  `gh api --method PUT|POST <url> --input <f>`
+#
+# Targets bash 3.2+ (macOS system bash).
+
+if [ "${1:-}" = "repo" ] && [ "${2:-}" = "view" ]; then
+  if [ -z "${FAKE_GH_REPO:-}" ]; then
+    echo "fake gh: no FAKE_GH_REPO configured" >&2
+    exit 1
+  fi
+  printf '%s\n' "$FAKE_GH_REPO"
+  exit 0
+fi
+
+if [ "${1:-}" = "api" ]; then
+  # gh api --method PUT|POST <url> --input <file>  (apply)
+  if [ "${2:-}" = "--method" ]; then
+    method="${3:-}"
+    url="${4:-}"
+    if [ "${5:-}" != "--input" ]; then
+      echo "fake gh: expected --input as 5th arg, got '${5:-}'" >&2
+      exit 1
+    fi
+    input="${6:-}"
+    if [ -z "${FAKE_GH_CALLS_LOG:-}" ]; then
+      echo "fake gh: no FAKE_GH_CALLS_LOG configured" >&2
+      exit 1
+    fi
+    printf '%s\t%s\t%s\n' "$method" "$url" "$input" >> "$FAKE_GH_CALLS_LOG"
+    exit 0
+  fi
+
+  case "${2:-}" in
+    repos/*/rulesets)
+      # gh api repos/<repo>/rulesets --jq '...'  (live index listing)
+      if [ "${3:-}" = "--jq" ]; then
+        if [ -z "${FAKE_GH_RULESETS_LIST_OUTPUT:-}" ]; then
+          echo "fake gh: no FAKE_GH_RULESETS_LIST_OUTPUT configured" >&2
+          exit 1
+        fi
+        cat "$FAKE_GH_RULESETS_LIST_OUTPUT"
+        exit 0
+      fi
+      ;;
+    repos/*/rulesets/*)
+      # gh api repos/<repo>/rulesets/<id>  (single ruleset fetch)
+      id="${2##*/}"
+      if [ -z "${FAKE_GH_RULESETS_DIR:-}" ]; then
+        echo "fake gh: no FAKE_GH_RULESETS_DIR configured" >&2
+        exit 1
+      fi
+      f="$FAKE_GH_RULESETS_DIR/$id.json"
+      if [ ! -f "$f" ]; then
+        echo "fake gh: no fixture for ruleset id $id" >&2
+        exit 1
+      fi
+      cat "$f"
+      exit 0
+      ;;
+  esac
+fi
+
+echo "fake gh: unrecognized invocation: $*" >&2
+exit 1
