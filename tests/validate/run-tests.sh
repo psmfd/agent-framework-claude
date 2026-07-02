@@ -37,8 +37,12 @@
 # Reset between cases: `git -C fixture checkout -q -- .` (reverts tracked-file
 # mutations) then `git -C fixture clean -q -fdx -- <paths>` scoped to the
 # untracked paths the case created (new fixture-only files never committed
-# upstream). The fixture is cloned once; every case mutates and resets it in
-# place rather than paying a fresh clone per case.
+# upstream), then a re-apply of the validate.sh/rulesets/ overlay (see
+# "Uncommitted-gate overlay" below) — the blanket `git checkout -- .` step
+# reverts EVERY modified tracked file, validate.sh included, so every reset
+# must restore the overlay or later cases silently run against the stale
+# committed-HEAD validate.sh. The fixture is cloned once; every case mutates
+# and resets it in place rather than paying a fresh clone per case.
 #
 # Surprises found while building this harness (validate.sh behaviors, not
 # harness bugs — reported to the orchestrator rather than fixed here, since
@@ -65,13 +69,25 @@
 #      avoids the trap while the stub's guaranteed failure still keeps every
 #      gh-backed check a no-op.
 #
+# Uncommitted-gate overlay: this harness's `git clone --local` only sees
+# committed HEAD, but validate.sh and rulesets/ are, as of this writing,
+# UNCOMMITTED working-tree changes (a new check_ruleset_job_drift function,
+# ADR-086, plus the WARN-not-SKIP check_shellcheck rewrite). A bare clone
+# would exercise the OLD validate.sh and every rulesets-* / shellcheck-absent
+# case below would fail against gate logic that doesn't exist yet. This
+# harness deliberately overlays $REPO_ROOT's *working-tree* validate.sh and
+# rulesets/ onto the fixture immediately after cloning (see "Overlay" below)
+# so it always tests the CURRENT gate logic on disk. Once these changes are
+# committed, `git clone --local` already carries them and the overlay copy
+# is a byte-identical no-op — this step never needs to be removed.
+#
 # Output per rules/script-output-conventions.md.
 # Exit codes: 0 all cases pass, 1 one or more case failures (or precondition
 # failure), 2 environment/precondition setup failure (missing tool, no fixture).
 #
 # Usage: bash tests/validate/run-tests.sh
 #
-# Cases (12 total, including the precondition):
+# Cases (17 total, including the precondition):
 #   1.  clean baseline                          -> precondition (must PASS)
 #   2.  agent missing `tools:` frontmatter       -> check_agent
 #   3.  agent missing disable-model-invocation   -> check_agent
@@ -86,6 +102,19 @@
 #   10. HOME has no ~/.claude symlinks           -> check_symlinks
 #   11. dangling relative markdown link          -> check_relative_links
 #   12. code fence without a language tag        -> check_documentation
+#   13. ruleset context renamed out from under    -> check_ruleset_job_drift
+#       its workflow job (ADR-086)                 (ERROR)
+#   14. workflow job renamed out from under a     -> check_ruleset_job_drift
+#       ruleset's required context (ADR-086)        (ERROR, same message,
+#                                                     triggered from the
+#                                                     workflow side)
+#   15. rulesets/ absent entirely                -> check_ruleset_job_drift
+#       (ruleset-as-code not adopted)                (SKIP, not ERROR)
+#   16. new workflow job not required by any     -> check_ruleset_job_drift
+#       committed ruleset (positive control)        (WARN, exit 0)
+#   17. shellcheck absent from PATH               -> check_shellcheck
+#       (guarded: real shellcheck must be            (WARN, not SKIP)
+#       present on the host to prove removal)
 
 if (( ${BASH_VERSINFO[0]:-0} < 4 )); then
   echo "ERROR [env] tests/validate/run-tests.sh requires bash 4.0 or later (found ${BASH_VERSION:-unknown}) — it drives validate.sh, which has the same floor (declare -A)" >&2
@@ -165,12 +194,45 @@ chmod +x "$CLEAN_BIN/gh"
 
 CLEAN_PATH="$CLEAN_BIN"
 
+# --- Overlay: apply $REPO_ROOT's uncommitted validate.sh + rulesets/ onto
+# the fixture (see the "Uncommitted-gate overlay" header note above for why).
+# OVERLAY_SRC is a frozen snapshot taken once, right now — not a live
+# reference to $REPO_ROOT — so a case that resets by re-applying the overlay
+# is unaffected by any concurrent change to the real working tree during the
+# run. apply_overlay() is idempotent; reset_fixture() (defined below) calls
+# it on every reset for two distinct reasons: (1) rulesets/*.json is
+# untracked in the fixture's own git repo (cp'd in, never `git add`ed there),
+# so `git checkout -- .` cannot restore or re-create it — only re-copying
+# from the snapshot can; (2) validate.sh IS a normally-tracked file left
+# locally modified by the overlay, and `git checkout -- .` reverts every
+# modified tracked file, so without the re-apply it would silently regress
+# validate.sh back to the stale committed-HEAD version on every reset.
+OVERLAY_SRC="$WORK/overlay-src"
+mkdir -p "$OVERLAY_SRC"
+cp "$REPO_ROOT/$VALIDATE_REL" "$OVERLAY_SRC/$VALIDATE_REL"
+if [[ -d "$REPO_ROOT/rulesets" ]]; then
+  cp -R "$REPO_ROOT/rulesets" "$OVERLAY_SRC/rulesets"
+fi
+
+apply_overlay() {
+  cp "$OVERLAY_SRC/$VALIDATE_REL" "$FIXTURE/$VALIDATE_REL"
+  rm -rf "$FIXTURE/rulesets"
+  if [[ -d "$OVERLAY_SRC/rulesets" ]]; then
+    cp -R "$OVERLAY_SRC/rulesets" "$FIXTURE/rulesets"
+  fi
+}
+apply_overlay
+
 # --- Run the fixture's own validate.sh; populate VALIDATE_OUT/VALIDATE_RC ---
+# Optional $1 overrides PATH for this one run (default: $CLEAN_PATH) — used
+# by the shellcheck-absent-from-PATH case to swap in a curated PATH lacking
+# only the `shellcheck` symlink.
 VALIDATE_OUT=""
 VALIDATE_RC=0
 run_validate() {
+  local use_path="${1:-$CLEAN_PATH}"
   local rc=0
-  VALIDATE_OUT="$(cd "$FIXTURE" && env -i PATH="$CLEAN_PATH" HOME="$FIXTURE_HOME" LANG=C LC_ALL=C bash "./$VALIDATE_REL" 2>&1)" || rc=$?
+  VALIDATE_OUT="$(cd "$FIXTURE" && env -i PATH="$use_path" HOME="$FIXTURE_HOME" LANG=C LC_ALL=C bash "./$VALIDATE_REL" 2>&1)" || rc=$?
   VALIDATE_RC=$rc
 }
 
@@ -182,6 +244,14 @@ reset_fixture() {
   if [[ $# -gt 0 ]]; then
     git -C "$FIXTURE" clean -q -fdx -- "$@" 2>/dev/null || true
   fi
+  # validate.sh is a normally-tracked file that the overlay (see above)
+  # deliberately leaves locally modified relative to HEAD. The blanket
+  # `git checkout -q -- .` above reverts EVERY modified tracked file,
+  # validate.sh included — so every reset_fixture() call must re-apply the
+  # overlay, or any case downstream of one silently regresses to the stale
+  # committed-HEAD validate.sh (and loses check_ruleset_job_drift/the
+  # WARN-not-SKIP check_shellcheck rewrite entirely). Cheap and idempotent.
+  apply_overlay
 }
 
 # Assert VALIDATE_RC == expected exit code AND every remaining arg is present
@@ -438,6 +508,152 @@ DOC
   reset_fixture "$f"
 }
 
+# --- Case 13: check_ruleset_job_drift — ruleset context orphaned (ADR-086) ---
+# Rename one required-status-check "context" inside a committed ruleset so it
+# no longer matches any workflow job's effective name. rulesets/*.json is
+# untracked in the fixture (overlay-applied, never `git add`ed there), so
+# reset is apply_overlay(), not reset_fixture()/git checkout.
+# shellcheck disable=SC2329  # invoked indirectly via the CASES registry
+case_ruleset_context_orphaned() {
+  local f="rulesets/protect-dev.json"
+  if [[ ! -f "$FIXTURE/$f" ]]; then
+    err "check_ruleset_job_drift-context-orphaned-setup" "$f not found in fixture (rulesets/ not adopted yet, or overlay source missing) — case skipped"
+    errors=$((errors + 1))
+    return
+  fi
+  if ! grep -qF '"context": "validate"' "$FIXTURE/$f"; then
+    err "check_ruleset_job_drift-context-orphaned-setup" "no '\"context\": \"validate\"' entry found in $f — case skipped"
+    errors=$((errors + 1))
+    return
+  fi
+  sed 's/"context": "validate"/"context": "validate-zztest"/' "$FIXTURE/$f" > "$FIXTURE/$f.zztmp" \
+    && mv "$FIXTURE/$f.zztmp" "$FIXTURE/$f"
+  run_validate
+  assert_case "check_ruleset_job_drift-context-orphaned" 1 \
+    "ERROR [rulesets]" "matches no workflow job"
+  apply_overlay
+}
+
+# --- Case 14: check_ruleset_job_drift — workflow job renamed (ADR-086) ---
+# Same underlying defect as case 13 (a required context with no matching
+# job) triggered from the other side: rename the job's `name:` field instead
+# of the ruleset's context. .github/workflows/validate.yml is a normally
+# tracked, unmodified-at-HEAD file, so reset_fixture() (git checkout, which
+# also re-applies the overlay — see reset_fixture()'s own comment) is
+# sufficient here.
+# shellcheck disable=SC2329  # invoked indirectly via the CASES registry
+case_ruleset_workflow_job_renamed() {
+  local rf="rulesets/protect-dev.json" wf=".github/workflows/validate.yml"
+  if [[ ! -f "$FIXTURE/$rf" ]]; then
+    err "check_ruleset_job_drift-job-renamed-setup" "$rf not found in fixture (rulesets/ not adopted yet, or overlay source missing) — case skipped"
+    errors=$((errors + 1))
+    return
+  fi
+  if [[ ! -f "$FIXTURE/$wf" ]]; then
+    err "check_ruleset_job_drift-job-renamed-setup" "$wf not found in fixture — case skipped"
+    errors=$((errors + 1))
+    return
+  fi
+  if ! grep -qxF '    name: validate' "$FIXTURE/$wf"; then
+    err "check_ruleset_job_drift-job-renamed-setup" "no '    name: validate' job-name line found in $wf — case skipped"
+    errors=$((errors + 1))
+    return
+  fi
+  sed 's/^    name: validate$/    name: validate-zztest/' "$FIXTURE/$wf" > "$FIXTURE/$wf.zztmp" \
+    && mv "$FIXTURE/$wf.zztmp" "$FIXTURE/$wf"
+  run_validate
+  assert_case "check_ruleset_job_drift-job-renamed" 1 \
+    "ERROR [rulesets]" "matches no workflow job"
+  reset_fixture "$wf"
+}
+
+# --- Case 15: check_ruleset_job_drift — rulesets/ absent entirely ---
+# Deleting rulesets/ must SKIP the drift check (ruleset-as-code treated as
+# not-adopted), never ERROR, and must not fail the overall run. assert_case
+# only checks for substring PRESENCE, so this case is hand-rolled to also
+# assert the ERROR line's ABSENCE — the property that matters most here.
+# rulesets/ is untracked in the fixture, so reset is apply_overlay(), which
+# also handles re-creating the directory apply_overlay() just removed.
+# shellcheck disable=SC2329  # invoked indirectly via the CASES registry
+case_ruleset_dir_absent() {
+  if [[ ! -d "$FIXTURE/rulesets" ]]; then
+    err "check_ruleset_job_drift-dir-absent-setup" "rulesets/ not present in fixture to begin with — case skipped"
+    errors=$((errors + 1))
+    return
+  fi
+  rm -rf "$FIXTURE/rulesets"
+  run_validate
+  local skip_found=0 error_found=0
+  printf '%s' "$VALIDATE_OUT" | grep -qF "SKIP  [rulesets] rulesets/ not present" && skip_found=1
+  printf '%s' "$VALIDATE_OUT" | grep -qF "ERROR [rulesets]" && error_found=1
+  if [[ "$VALIDATE_RC" -eq 0 && $skip_found -eq 1 && $error_found -eq 0 ]]; then
+    ok "check_ruleset_job_drift-dir-absent" "rulesets/ removed -> SKIP (not ERROR), exit 0"
+  else
+    err "check_ruleset_job_drift-dir-absent" "assertion failed (exit=$VALIDATE_RC, skip_found=$skip_found, error_found=$error_found)"
+    errors=$((errors + 1))
+    printf '%s\n' "$VALIDATE_OUT" | tail -25 | sed 's/^/      /' >&2
+  fi
+  apply_overlay
+}
+
+# --- Case 16: check_ruleset_job_drift — unrequired job warns (positive
+# control) ---
+# A brand-new workflow job that no committed ruleset requires must WARN
+# (informational), not ERROR, and must not fail the run. Appends a trivial
+# job to the tracked .github/workflows/validate.yml, so reset_fixture()
+# (git checkout, which also re-applies the overlay) is sufficient.
+# shellcheck disable=SC2329  # invoked indirectly via the CASES registry
+case_ruleset_unrequired_job_warns() {
+  local wf=".github/workflows/validate.yml"
+  if [[ ! -f "$FIXTURE/$wf" ]]; then
+    err "check_ruleset_job_drift-unrequired-warn-setup" "$wf not found in fixture — case skipped"
+    errors=$((errors + 1))
+    return
+  fi
+  cat >> "$FIXTURE/$wf" <<'JOB'
+
+  zz-test-trivial-job:
+    name: zz-test-trivial-job
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo zz-test-harness-job
+JOB
+  run_validate
+  assert_case "check_ruleset_job_drift-unrequired-warn" 0 \
+    "WARN  [rulesets] job 'zz-test-trivial-job' is not required"
+  reset_fixture "$wf"
+}
+
+# --- Case 17: check_shellcheck — shellcheck absent from PATH -> WARN not SKIP ---
+# Reuses the harness's own curated-PATH machinery (CLEAN_BIN) rather than
+# building a PATH from tool *directories* (e.g. `dirname "$(command -v
+# bash)"`). A directory-based PATH is unsafe on exactly the kind of host this
+# harness already runs on: Homebrew macOS installs bash and shellcheck into
+# the SAME directory (/opt/homebrew/bin), so adding "bash's directory" to
+# PATH would silently re-expose shellcheck and defeat the case — the
+# colocation hazard this case must guard against. Copying CLEAN_BIN and
+# deleting only its `shellcheck` symlink sidesteps that hazard structurally:
+# the curated dir never has a file named `shellcheck`, regardless of which
+# real directory shellcheck lives in on this host, and every other tool
+# (jq, find, sha256sum, …) stays resolvable — so no separate SKIP-on-
+# colocation branch is needed. The guard below instead SKIPs the narrower,
+# still-real degenerate case where shellcheck was never resolvable on the
+# host to begin with (nothing to prove absent-by-removal).
+# shellcheck disable=SC2329  # invoked indirectly via the CASES registry
+case_shellcheck_absent_from_path() {
+  if [[ ! -e "$CLEAN_BIN/shellcheck" ]]; then
+    skip "check_shellcheck-absent-warn" "shellcheck not installed on this host — nothing to remove to prove the absent-from-PATH path; skipping"
+    return
+  fi
+  local nb="$WORK/bin-no-shellcheck"
+  rm -rf "$nb"
+  cp -R "$CLEAN_BIN" "$nb"
+  rm -f "$nb/shellcheck"
+  run_validate "$nb"
+  assert_case "check_shellcheck-absent-warn" 0 \
+    "WARN  [shellcheck] shellcheck not installed — lint skipped locally but ENFORCED in CI"
+}
+
 # --- Case registry (name:function), run in order after the precondition ---
 CASES=(
   "check_agent-missing-tools:case_missing_tools_field"
@@ -451,6 +667,11 @@ CASES=(
   "check_symlinks-missing:case_symlinks_missing"
   "check_relative_links-dangling:case_dangling_relative_link"
   "check_documentation-fence-no-lang:case_fence_without_language"
+  "check_ruleset_job_drift-context-orphaned:case_ruleset_context_orphaned"
+  "check_ruleset_job_drift-job-renamed:case_ruleset_workflow_job_renamed"
+  "check_ruleset_job_drift-dir-absent:case_ruleset_dir_absent"
+  "check_ruleset_job_drift-unrequired-warn:case_ruleset_unrequired_job_warns"
+  "check_shellcheck-absent-warn:case_shellcheck_absent_from_path"
 )
 TOTAL_CASES=$((${#CASES[@]} + 1))
 

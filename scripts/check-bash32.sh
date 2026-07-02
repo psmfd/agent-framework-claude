@@ -70,7 +70,7 @@ for lib in "$REPO_DIR"/scripts/lib/*.sh; do
 done
 
 # --- 2. Syntax checks (parse-time only; runtime is covered by 3 and 4) --------
-for f in "$REPO_DIR"/setup.sh "$REPO_DIR"/hooks/*.sh; do
+for f in "$REPO_DIR"/setup.sh "$REPO_DIR"/scripts/rulesets.sh "$REPO_DIR"/hooks/*.sh; do
   name="${f#"$REPO_DIR"/}"
   if "$BASH32_BIN" -n "$f" 2>/dev/null; then
     ok "syntax" "$name parses under bash 3.2"
@@ -114,7 +114,7 @@ fi
 # requires bash 4.0+ by design (see its header).
 for suite in secrets-guard worktree-guard gh-identity-guard \
              session-gh-identity-guard session-secrets-guard \
-             bash-destructive-guard; do
+             bash-destructive-guard rulesets; do
   runner="$REPO_DIR/tests/$suite/run-tests.sh"
   if [ ! -f "$runner" ]; then
     skip "suite" "tests/$suite/run-tests.sh not found"
