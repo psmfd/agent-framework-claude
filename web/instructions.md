@@ -151,7 +151,7 @@ Merge method depends on the PR target:
 
 Do not rebase merge for either target. Do not merge `main` back to `dev`.
 
-Branch protection uses repository Rulesets with no bypass actors (administrators included — every change goes through a PR). `dev`: require PR (0 approvals), squash-only, linear history, block force-push and deletion, required checks `validate` + `lint-pr-title` + `artifact-review-guard` + `secrets-scan`. `main`: require PR (0 approvals), merge-commit-only, block force-push and deletion, required check `validate`, no linear history. No org- or enterprise-level rulesets are inherited, so solo `dev` → `main` promotions take the normal PR path with no owner-bypass ceremony.
+Branch protection uses repository Rulesets with no bypass actors (administrators included — every change goes through a PR). `dev`: require PR (0 approvals), squash-only, linear history, block force-push and deletion, required checks `validate` + `lint-pr-title` + `artifact-review-guard` + `secrets-scan` + `zizmor` + `codeql` + `tests` + `bash32-compat`. `main`: require PR (0 approvals), merge-commit-only, block force-push and deletion, required check `validate`, no linear history. No org- or enterprise-level rulesets are inherited, so solo `dev` → `main` promotions take the normal PR path with no owner-bypass ceremony.
 
 ### Conventional Commits
 
