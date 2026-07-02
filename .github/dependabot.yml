@@ -13,6 +13,11 @@ updates:
     commit-message:
       prefix: "ci"
     open-pull-requests-limit: 10
+    # Supply-chain cooldown (zizmor dependabot-cooldown): wait out the first
+    # week of a new release before adopting it. Applies to VERSION updates
+    # only — Dependabot security updates are never delayed by cooldown.
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "npm"
     directory: "/"
@@ -35,3 +40,7 @@ updates:
     ignore:
       - dependency-name: "conventional-changelog-conventionalcommits"
         update-types: ["version-update:semver-major"]
+    # Same 7-day version-update cooldown as the actions ecosystem; security
+    # updates bypass cooldown by design.
+    cooldown:
+      default-days: 7
