@@ -1041,8 +1041,6 @@ check_documentation() {
 # check makes the lockstep mechanical: byte-identical or ERROR. Drift in one
 # hook of a pair silently weakens the layer it belongs to, so this is
 # ERROR-gated like check_shellcheck and check_frozen_scripts.
-# NOTE: extract_host() is NOT in the lockstep set — it exists only in the
-# pre-push hook today (#17); add it here when #17 lands it in the session hook.
 
 # Extract a named shell function body from a file. Matches the repo's two
 # function shapes: a one-liner (`name() { ...; }` on one line) or a multi-line
@@ -1102,6 +1100,7 @@ check_lockstep_duplication() {
   lockstep_compare var  SECRET_PATTERNS  "$secrets_a" "$secrets_b"
   lockstep_compare var  GH_LOGIN_RE      "$ident_a" "$ident_b"
   lockstep_compare func sanitize         "$ident_a" "$ident_b"
+  lockstep_compare func extract_host     "$ident_a" "$ident_b"
   lockstep_compare func is_valid_login   "$ident_a" "$ident_b"
   lockstep_compare func parse_owner_repo "$ident_a" "$ident_b"
 }

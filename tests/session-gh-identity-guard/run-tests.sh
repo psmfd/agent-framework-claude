@@ -29,8 +29,8 @@
 #  16. gh missing from PATH -> deny (fail closed)
 #  17. GH_TOKEN + FAKE_GH_ACCESS grants repo -> allow
 #  18. GH_TOKEN + no access -> deny
-#  19. SPECIAL: non-GitHub origin + mutating `git push` — see the dedicated
-#      comment block on case_special_non_github_origin() below (issue #17).
+#  19. non-GitHub origin + mutating `git push` -> silent allow without probe
+#      (host scoping via extract_host, fixed by #17; FAKE_GH_FAIL set)
 #
 # Each case builds a throwaway git repo (mktemp) with an `origin` remote set
 # to the URL the case needs — the real developer repo and $HOME are never
@@ -334,8 +334,11 @@ case_empty_stdin_allowed() {
 case_gh_missing() {
   reset_case_env
   local no_gh_path
-  if ! no_gh_path="$(build_path_without "git jq cat" "gh")"; then
-    skip "gh-missing" "could not resolve git/jq/cat on the real PATH — cannot construct a gh-free PATH"
+  # tr is required since #17: the host-scope check (extract_host) runs before
+  # the gh-availability check and pipes through tr — without it the scope
+  # check cannot classify the origin and the deny under test is never reached.
+  if ! no_gh_path="$(build_path_without "git jq cat tr" "gh")"; then
+    skip "gh-missing" "could not resolve git/jq/cat/tr on the real PATH — cannot construct a gh-free PATH"
     return
   fi
   local d; d="$(new_repo)"
@@ -366,40 +369,24 @@ case_token_access_deny() {
   assert_result "token-access-deny" 2 "token identity cannot access"
 }
 
-# --- Case 19 (SPECIAL): non-GitHub origin + mutating git push --------------
+# --- Case 19: non-GitHub origin + mutating git push -> silent allow ---------
 #
-# KNOWN SUSPECTED DEFECT (tracked as issue #17 —
-# https://github.com/psmfd/agent-framework-claude/issues/17): unlike the
-# pre-push hook (hooks/gh-identity-guard.sh), which scopes itself to
-# github.com via extract_host() before doing anything else, the in-session
-# hook (hooks/session-gh-identity-guard.sh) never checks the origin's host at
-# all. parse_owner_repo() happily strips scheme/host off ANY URL — including
-# a non-GitHub one like a GitLab remote — and hands the resulting "owner/repo"
-# string to `gh api repos/<owner>/<repo>`, which queries GITHUB's API for a
-# repo that does not live there.
+# Fixed by #17: the session hook now scopes itself to github.com origins via
+# extract_host() (byte-identical with the pre-push hook's copy — enforced by
+# the ADR-083 lockstep-duplication gate in validate.sh) before any identity
+# resolution. A mutating op against a GitLab / Azure DevOps / self-hosted
+# origin passes through silently instead of being probed against github.com's
+# API for a same-named repo that does not live there.
 #
-# Empirically, this means a mutating `git push` to a non-GitHub origin is
-# NOT exempted (as the pre-push hook would exempt it) — it gets gated, and
-# the outcome depends on whether GitHub happens to host a same-named
-# "owner/repo" the active account can reach. In this test, the fake gh shim
-# has no access to that owner/repo, so the hook DENIES a push that should
-# have been silently out of scope for a non-GitHub remote entirely.
-#
-# This case locks in that CURRENT (believed-incorrect) behavior so a
-# regression suite exists either way. When #17 lands host-scoping in the
-# session hook (bringing it into lockstep with the pre-push hook's
-# extract_host() check, per the ADR-083 lockstep-duplication gate in
-# validate.sh), this assertion must flip from deny to a silent allow —
-# update assert_result to `assert_silent_allow "special-non-github-origin"`
-# at that time.
+# FAKE_GH_FAIL=1 is the proof mechanism (same technique as cases 1, 6, 10,
+# 13, 14, 15): any gh probe would flip this to a deny, so a silent allow
+# proves extract_host short-circuited before any gh call fired.
 case_special_non_github_origin() {
   reset_case_env
   local d; d="$(new_repo "git@gitlab.example.com:owner/repo.git")"
-  export FAKE_GH_LOGIN="octocat"
-  export FAKE_GH_ACCESS=""   # "owner/repo" is not accessible on github.com
+  export FAKE_GH_FAIL=1   # a probe, if it fired, would flip this to deny
   run_hook "$d" "$(mk_input Bash 'git push origin main')"
-  # Current (likely wrong) behavior: gated and denied. See comment block above.
-  assert_result "special-non-github-origin" 2 "cannot access"
+  assert_silent_allow "special-non-github-origin"
 }
 
 info "session-gh-identity-guard.sh (PreToolUse hook) acceptance tests"

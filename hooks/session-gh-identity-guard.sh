@@ -24,8 +24,11 @@
 # (command-substring allow), GH_IDENTITY_OVERRIDE=<login> (env only — the
 # command-string prefix form is deliberately not honored; ADR-070).
 #
-# In-session scope note: checks against `origin`; the pre-push hook checks the
-# actual push remote. Documented gaps (accepted): shell aliases, env-var-
+# In-session scope note: checks against `origin`, and only when `origin` is a
+# github.com remote (exact host match via extract_host, in lockstep with the
+# pre-push hook — #17); GitLab / Azure DevOps / self-hosted origins pass
+# through silently. The pre-push hook checks the actual push remote.
+# Documented gaps (accepted): shell aliases, env-var-
 # constructed commands, `curl` with a `gh auth token`, and an agent with
 # Write/Edit tool access pre-writing a .gh-identity-allowlist entry (the write
 # is visible in the activity stream; this guard gates Bash/execute only).
@@ -37,6 +40,19 @@
 set -uo pipefail
 
 sanitize() { printf '%s' "$1" | tr -d '\000-\037\177'; }
+
+# Extract the host from a remote URL and lowercase it. Splits host from path
+# before handling userinfo so an '@' in the path or a double-'@' in userinfo
+# cannot misdirect the split; strips a trailing dot (absolute-DNS form).
+extract_host() {
+  local url="$1" host host_part
+  case "$url" in *://*) url="${url#*://}" ;; esac
+  host_part="${url%%/*}"
+  case "$host_part" in *@*) host_part="${host_part##*@}" ;; esac
+  host="${host_part%%[:]*}"
+  host="${host%.}"
+  printf '%s' "$host" | tr '[:upper:]' '[:lower:]'
+}
 
 deny() {
   printf 'session-gh-identity-guard: denied — %s\n' "$1" >&2
@@ -112,8 +128,22 @@ is_mutating_op() {
 }
 is_mutating_op "$COMMAND" || exit 0
 
-# --- .gh-identity-allowlist (command-substring allow) ------------------------
+# --- Scope: github.com origins only (#17) -------------------------------------
+# Mirrors the pre-push hook's extract_host scoping. A non-GitHub origin
+# (GitLab, Azure DevOps, self-hosted) must pass through silently — probing it
+# as `gh api repos/<owner>/<repo>` queries github.com's API for a repo that
+# does not live there and false-denies a legitimate operation. An absent or
+# unparseable origin also exits here: with no github.com target there is
+# nothing for this guard to gate in-session (the pre-push hook still gates any
+# actual push by its real remote URL).
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+origin_url="$(git remote get-url origin 2>/dev/null || true)"
+case "$(extract_host "$origin_url")" in
+  github.com) : ;;
+  *) exit 0 ;;
+esac
+
+# --- .gh-identity-allowlist (command-substring allow) ------------------------
 if [ -n "$repo_root" ] && [ -f "$repo_root/.gh-identity-allowlist" ]; then
   while IFS= read -r pat || [ -n "$pat" ]; do
     [ -z "$pat" ] && continue
@@ -159,8 +189,6 @@ fi
 # --- Probe active login (authoritative) --------------------------------------
 active_login="$(gh api user --jq .login 2>/dev/null || true)"
 [ -z "$active_login" ] && deny "could not determine active gh identity (unauthenticated, network, or API error)"
-
-origin_url="$(git remote get-url origin 2>/dev/null || true)"
 
 # --- GH_TOKEN/GITHUB_TOKEN (CI/bot): accessibility under the token -----------
 # An explicit GH_IDENTITY_OVERRIDE is deliberate intent and wins over the token
