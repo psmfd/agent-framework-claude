@@ -4,6 +4,8 @@ description: 'Mandate a pre-commit guard against unencrypted Ansible vault files
 
 # Secrets Guard
 
+**Enforcement:** pre-commit hook secrets-guard.sh; PreToolUse hook session-secrets-guard.sh; CI secrets-scan.yml
+
 Secrets are guarded in two layers that share one pattern set and one set of overrides. **Layer 1 (pre-commit):** `setup.sh` installs `hooks/secrets-guard.sh` as the framework repo's `pre-commit` hook, blocking commits containing unencrypted Ansible vault files, PEM private keys, AWS access key IDs, GitHub personal access tokens, and SSH private key file paths. **Layer 2 (in-session):** `hooks/session-secrets-guard.sh` is a `PreToolUse` hook that denies the same material the moment an agent tries to surface it — before it ever reaches disk. Pre-commit prevention is significantly cheaper than post-push detection (once a secret reaches a remote, rotation is the only remediation); in-session prevention is cheaper still, since it stops a secret from being written or echoed at all.
 
 ## What the hook blocks

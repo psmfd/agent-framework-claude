@@ -12,11 +12,15 @@ permissions:
 jobs:
   validate:
     name: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           fetch-depth: 0
 
       - name: Run validate.sh
+        # GITHUB_TOKEN is not auto-exported to run: steps; check_gh_identity()
+        # skips its network probe only when the token is present.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash validate.sh

@@ -4,7 +4,9 @@ description: 'Enforce multi-agent research with minimum three agents, quorum-bas
 
 # Research Parallelism
 
-This rule is mandatory, not advisory. When the orchestrator protocol classifies a task as Research, this rule applies in full. There are no soft opt-outs.
+**Enforcement:** self-report only — no hook or CI observes `Agent` tool invocation counts or fan-out composition (#24 tracks mechanical enforcement)
+
+This rule is mandatory, not advisory. When the orchestrator protocol classifies a task as Research, this rule applies in full. There are no soft opt-outs. See the Fan-Out Shapes and Aggregation Policy table in [orchestrator-protocol.md](orchestrator-protocol.md) for how this shape's aggregation compares to replication and multi-reviewer commands.
 
 ## When This Rule Applies
 
@@ -20,6 +22,8 @@ Any task that involves:
 - Answering questions that touch domain expertise covered by custom agents
 
 If the task matches ANY of the above, this rule applies. The question is never "is this complex enough to warrant research?" — it is "does this involve any investigation, evaluation, or domain knowledge?" If yes, fan out.
+
+This list governs tasks already classified **Research** under `orchestrator-protocol.md`. The only task-classification-time carve-out is the Verified Single-Fact Lookup exemption in that rule's Narrow Exemptions — a bounded, four-criteria test applied *before* a task reaches this list, never a judgment call made from inside it. Once a task is classified Research, "no soft opt-outs" (above) is absolute: there is no post-classification escape hatch, and nothing in this rule creates one.
 
 ## Requirements
 
@@ -37,7 +41,7 @@ If the task matches ANY of the above, this rule applies. The question is never "
 
 ## Return Contract
 
-Every parallel agent's response must be aggregable without parsing free-form prose. The orchestrator MUST request this contract in each delegation brief, and each agent MUST end its response with a bounded executive summary followed by a single machine-parseable verdict line. The verdict line MUST be the final line of the response — no text, whitespace, or footnotes may follow it. The purpose is deterministic aggregation, not output-truncation insurance.
+Every parallel agent's response must be aggregable without parsing free-form prose. The orchestrator MUST request this contract in each delegation brief, and each agent MUST end its response with a bounded executive summary followed by a single machine-parseable verdict line. The verdict line MUST be the final line of the response — no text, whitespace, or footnotes may follow it. The purpose is deterministic aggregation, not output-truncation insurance. The aggregation algorithm this contract feeds is defined in `### Synthesis Procedure` below.
 
 **Executive summary** — a 2–5 sentence paragraph stating the question the agent addressed, its principal finding or recommendation, and any blocking concern or open dependency. A summary that is only positive or non-committal while the agent identified a blocker is non-compliant.
 
@@ -47,9 +51,33 @@ Every parallel agent's response must be aggregable without parsing free-form pro
 - `PARTIAL` — part of the question is answered; the unresolved items are named in the summary.
 - `BLOCKED` — the agent could not proceed (missing context, conflicting requirement, or a question outside its domain); the reason is named in the summary.
 
-Review agents governed by `structured-review-format.md` (`code-review-expert`, `security-review-expert`, `linter`) use that rule's `**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES` line as their verdict and do NOT emit a second `AGENT-VERDICT:` line.
+Review agents governed by `structured-review-format.md` (`code-review-expert`, `security-review-expert`, `linter`) use that rule's `**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES | UNABLE_TO_REVIEW` line as their verdict and do NOT emit a second `AGENT-VERDICT:` line. That rule also defines a fail-closed default when the verdict line is missing entirely — see `structured-review-format.md`.
 
-**Synthesizer obligations** — the orchestrator treats a response with no verdict line as `PARTIAL`, surfaces any `BLOCKED` verdict to the user before synthesizing, and reuses each agent's executive summary as the "key contributions" entry in the Agent Efficacy Report.
+**Synthesizer obligations** — the orchestrator treats a non-review agent response with no verdict line as `PARTIAL`; treats a review-agent response with no `**Verdict:**` line as `NEEDS_CHANGES` per the fail-closed default in `structured-review-format.md` (never `PARTIAL` and never `PASS`); surfaces any `BLOCKED` or `UNABLE_TO_REVIEW` verdict to the user before synthesizing; and reuses each agent's executive summary as the "key contributions" entry in the Agent Efficacy Report.
+
+### Synthesis Procedure
+
+The synthesizer follows two ordered steps. Skipping the claims table and going straight to prose is the exact gap this section closes — `consensus-by-replication.md` has a procedural aggregation algorithm for its shape; divergence synthesis did not, until now.
+
+**Step 1 — Claims table (required, before prose).** Before writing any synthesized prose, the synthesizer builds a claims table with one row per agent:
+
+| Agent | Claim / finding | Verdict | Confidence / basis |
+| --- | --- | --- | --- |
+| `<agent-name>` | The agent's principal finding or recommendation, one line | `COMPLETE` \| `PARTIAL` \| `BLOCKED` (or the review-format verdict) | What the agent grounded the claim in — first-party docs, code read, prior art — or "unstated" if the agent did not say |
+
+Populate the table from each agent's executive summary and verdict line only — do not infer a claim the agent did not make. A row the synthesizer cannot fill is marked "unstated," never invented. If a majority of rows are "unstated," that is not normal — it means the agents' executive summaries were non-compliant with the Return Contract's requirement to state basis (see the executive-summary paragraph above); flag it rather than proceeding as if the gap were expected.
+
+**Step 2 — Prose synthesis (after the table, informed by it).** With the table built, the synthesizer writes the best-of-breed answer:
+
+- Claims present in the table with matching verdicts across agents are adopted directly — no further judgment call needed.
+- Claims that conflict (same question, different answers) are the disagreements this rule already requires surfacing — the table makes a conflict visible instead of relying on the synthesizer's recall of free-form prose.
+- Claims graded `BLOCKED` are excluded from the adopted answer and surfaced per the Synthesizer obligations above.
+
+The claims table does not replace the qualitative judgment of picking the strongest perspective when reasonable people could disagree — it bounds that judgment to the claims actually made, rather than a paraphrase from memory.
+
+### Crashed or Empty-Output Subagent
+
+An `Agent` invocation that crashes, times out, or returns empty/unparseable output is treated as `BLOCKED` for aggregation purposes — the same bucket a review agent's `UNABLE_TO_REVIEW` or missing-verdict state falls into (see `structured-review-format.md`). Do not silently drop the agent from the fan-out count, and do not retry it automatically more than once. Record the failure verbatim (error text, or "no output returned") in the Agent Efficacy Report's agent-table row for that agent, in place of "key contributions." A crash that drops the surviving agent count below the divergence minimum of 3 (`## Requirements` above) is itself a disagreement-worthy signal the Synthesizer obligations require surfacing to the user before synthesizing — do not silently backfill with a replacement agent to restore the count without telling the user why the original run fell short.
 
 ## Agent-behavioral Fan-out Composition
 

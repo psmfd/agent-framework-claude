@@ -4,13 +4,19 @@ on:
   push:
     branches: [main]
 
+# Serialize release runs: two overlapping main-push events must never run
+# semantic-release concurrently against the same ref (duplicate-tag race).
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
   release:
     name: release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       issues: write
@@ -22,7 +28,10 @@ jobs:
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
         with:
-          node-version: lts/*
+          # Pinned major (not lts/*): lts/* resolves at run time, so the same
+          # commit could build under a different Node over time. ADR-082's
+          # conventional-changelog pin assumes a checkable Node floor.
+          node-version: "24"
 
       - run: npm clean-install
 

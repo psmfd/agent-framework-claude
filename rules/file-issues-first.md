@@ -4,6 +4,8 @@ description: Sub-rule of plan-before-code — when planning surfaces out-of-scop
 
 # File Issues First
 
+**Enforcement:** self-report only
+
 When forming an implementation plan, if a work item surfaces that should exist as an issue — in this repo or any other — **filing that issue is the first step executed in the plan**, before any code or configuration changes. This is a sub-rule of [plan-before-code.md](plan-before-code.md): it governs how plans capture follow-up scope that will not land in the current PR.
 
 ## When This Rule Applies

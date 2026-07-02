@@ -4,6 +4,8 @@ description: Sub-rule of plan-before-code — enumerate the documentation surfac
 
 # Documentation in Plan
 
+**Enforcement:** self-report only
+
 When forming an implementation plan, **the plan must enumerate every documentation surface the change implies and classify each one** before any code or configuration changes. This is a sub-rule of [plan-before-code.md](plan-before-code.md) and a sibling of [file-issues-first.md](file-issues-first.md) — the same plan-time, three-way classification applied to the doc-sync axis instead of the issue-tracker axis.
 
 ## When This Rule Applies

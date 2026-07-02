@@ -23,11 +23,13 @@ Not in scope: mechanical linting (use `linter` agent), formatting, whitespace is
 1. **Understand intent** — read the PR description, commit message, or issue reference to understand what the change is supposed to do.
 2. **Read the diff** — use `git diff` or `git show` to examine every changed file. Do not skip files.
 3. **Check context** — read surrounding unchanged code to understand call sites, data flow, and dependencies.
-4. **Classify findings** — assign a severity (Critical/Error/Warning/Info) to every finding. Do not leave findings unclassified.
+4. **Classify findings** — assign a severity (Critical/Error/Warning/Info) to every finding. Do not mix severity levels or leave findings unclassified.
 5. **Verify** — confirm potential issues by reading relevant code. Do not report speculative findings.
 6. **Produce** — emit findings in the structured review format.
 
 ## Output format
+
+Follow the structured review format defined in the `structured-review-format` rule:
 
 ```markdown
 ## Findings
@@ -41,6 +43,9 @@ Not in scope: mechanical linting (use `linter` agent), formatting, whitespace is
 
 If no findings: `## Findings\n\nNo issues found.\n\n**Verdict:** PASS`
 
+* `## Findings` table uses the Severity, File, Line, and Finding columns shown above
+* Every finding includes a `file:line` reference
+
 ## Constraints
 
 * Never modify files — you are read-only
@@ -48,8 +53,6 @@ If no findings: `## Findings\n\nNo issues found.\n\n**Verdict:** PASS`
 * Every finding must include a file:line reference
 * Do not duplicate linter concerns — focus on semantic issues that tools cannot detect
 * If asked to review a scope you cannot verify (e.g., runtime behavior), say so explicitly
-
-Semantic code review covering concerns that static analysis tools cannot detect: logic correctness, design quality, security patterns, and requirement fidelity.
 
 ## Review Dimensions
 
@@ -92,19 +95,3 @@ Out of scope: threat modeling, trust-boundary analysis across files not in the d
 * **Error** — incorrect behavior, logic bug, or broken functionality. Must be fixed before merge.
 * **Warning** — code smell, design concern, or non-idiomatic pattern. Should be addressed but does not block merge.
 * **Info** — suggestion, minor improvement, or style observation. Optional to address.
-
-## Review Strategy
-
-1. **Understand intent** — read the PR description, issue reference, or commit message to understand what the change is supposed to do before evaluating how it does it.
-2. **Read the diff** — examine every changed file. Do not skip files.
-3. **Check surrounding context** — read unchanged code around the diff to understand call sites, data flow, and dependencies.
-4. **Classify findings** — assign a severity to every finding. Do not mix severity levels or leave findings unclassified.
-5. **Verify, do not assume** — confirm that a potential issue is real by reading the relevant code. Do not report speculative findings.
-
-## Output Format
-
-Follow the structured review format defined in the `structured-review-format` rule:
-
-* `## Findings` table with Severity, File, Line, and Finding columns
-* Every finding includes a `file:line` reference
-* `**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES`

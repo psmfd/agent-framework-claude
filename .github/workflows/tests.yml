@@ -1,0 +1,54 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run all test suites
+        run: |
+          set -uo pipefail
+          failed=0
+          for suite in tests/*/run-tests.sh; do
+            echo "=== $suite ==="
+            if ! bash "$suite"; then
+              echo "FAILED: $suite" >&2
+              failed=1
+            fi
+          done
+          exit "$failed"
+
+  # Verifies the bash 3.2 floor (ADR-083): macOS runners ship Apple's actual
+  # /bin/bash 3.2.57 — the exact binary setup.sh, hooks/*.sh, and
+  # scripts/lib/*.sh must stay compatible with. scripts/check-bash32.sh runs
+  # the lib self-tests, syntax checks, hook smoke invocations, and the
+  # 3.2-safe test suites under that binary; it exits 2 if the located binary
+  # is not bash 3.x, so a future runner-image change cannot silently turn
+  # this job into a no-op.
+  bash32-compat:
+    name: bash32-compat
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Verify /bin/bash is 3.2.x
+        run: /bin/bash --version | head -1
+
+      - name: Run bash 3.2 floor check
+        run: BASH32=/bin/bash bash scripts/check-bash32.sh

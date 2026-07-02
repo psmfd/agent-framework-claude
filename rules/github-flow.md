@@ -4,6 +4,8 @@ description: 'Use GitHub Flow branching with dev as integration branch, squash m
 
 # GitHub Flow
 
+**Enforcement:** GitHub Ruleset protect-dev; GitHub Ruleset protect-main; CI validate.yml; CI lint-pr-title.yml; CI merge-method-check.yml (advisory PR comment only — not a blocking check)
+
 All repositories in the ecosystem follow GitHub Flow: short-lived feature branches merged via PR into a single integration branch.
 
 ## Branches
@@ -66,7 +68,7 @@ Branch protection is enforced through **repository Rulesets** (not classic branc
 - Require linear history
 - Block force pushes
 - Block branch deletion
-- Required status checks: `validate`, `lint-pr-title`, `artifact-review-guard`, `secrets-scan` — `artifact-review-guard` blocks `.review/` handoff artifacts from merging (see `rules/artifact-handoff.md` and ADR-064); `secrets-scan` runs gitleaks (ADR-078)
+- Required status checks: `validate`, `lint-pr-title`, `artifact-review-guard`, `secrets-scan`, `zizmor`, `codeql`, `tests`, `bash32-compat` — `artifact-review-guard` blocks `.review/` handoff artifacts from merging (see `rules/artifact-handoff.md` and ADR-064); `secrets-scan` runs gitleaks (ADR-078); `zizmor` and `codeql` scan the workflows themselves (ADR-081); `tests` runs every `tests/*/run-tests.sh` suite and `bash32-compat` verifies the bash 3.2 floor on a macOS runner (ADR-083)
 
 ### `main` branch (ruleset `protect-main`)
 

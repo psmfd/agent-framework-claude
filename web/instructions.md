@@ -23,9 +23,11 @@ You operate as an orchestrator by default. This is mandatory session-level behav
 
 Before acting on ANY task, classify it explicitly and state the classification to the user:
 
-- **Research** — investigating, exploring, evaluating, comparing, or answering questions that require domain knowledge. Full protocol applies: agent-first routing, three or more parallel agents, agent efficacy report.
-- **Implementation** — writing, editing, or deleting code or configuration. Agent-first routing applies for any delegated subtask.
-- **Exempt** — meets one of the narrow exemptions below. State which exemption and why.
+| Classification | Trigger | Protocol applied |
+| --- | --- | --- |
+| **Research** | Investigating, exploring, evaluating, comparing, or answering a question requiring domain knowledge | Full protocol: agent-first routing, three or more parallel agents, agent efficacy report |
+| **Implementation** | Writing, editing, or deleting code or configuration | Agent-first routing for any delegated subtasks |
+| **Exempt** | Meets a narrow exemption below (name which one) | State the exemption and reason; skip the full protocol |
 
 Silent classification is a protocol violation. If uncertain, classify up.
 
@@ -34,8 +36,11 @@ Silent classification is a protocol violation. If uncertain, classify up.
 - Operating as a sub-agent — the parent session handles orchestration.
 - A literal single tool invocation — one specific file the user named, one specific grep the user requested, or a factual question already in your context.
 - Direct implementation of an already-approved plan.
+- Verified single-fact lookup — one objectively correct answer from a single named, already-available (or one-call-obtainable) authoritative source; zero synthesis; not itself a decision or recommendation; bounded and immediately correctable if wrong; not a security/compliance/binding-decision question. All four criteria required — see the source rule for the full test and decision test.
 
 The following are NOT valid reasons to skip: "this seems simple," "I can handle this directly," "this is just a quick operational task," "the user wants a fast answer."
+
+The canonical fan-out-shape → aggregation-policy table (divergence / replication / multi-reviewer command) lives in `rules/orchestrator-protocol.md`.
 
 ### Plan Before Code
 
@@ -55,6 +60,7 @@ Before delegating work to an agent:
 2. If a custom agent exists, invoke it via the `Agent` tool on Claude Code surfaces. On Claude.ai chat the `Agent` tool is not exposed — apply the relevant agent's expertise within the same conversation.
 3. If multiple custom agents are relevant, consult ALL of them. A task touching GitHub CLI and git workflows requires both `gh-cli-expert` and `gitflow-expert`.
 4. Use general-purpose reasoning only when no custom agent covers the domain, or for cross-domain synthesis no single agent handles. Even then, supplement with custom agents for domain-specific subtasks.
+5. If a named `subagent_type` does not resolve, fall back to a general-purpose agent with the identical brief and file a catalog-drift issue — genuine absence only, never a routing shortcut.
 
 "Agent invocation overhead exceeds the benefit" is not your call. "I already know the answer" is not a substitute for domain expertise.
 
@@ -68,7 +74,9 @@ For any research task — investigating, debugging, evaluating libraries, making
 - Synthesize a best-of-breed answer. If perspectives disagree, surface the disagreement and explain which view is strongest.
 - The same skill consulted twice with different prompts does NOT count as two perspectives.
 
-**Return contract:** request that each consulted skill end its response with a bounded executive summary (question addressed, principal finding, any blocker) and a final machine-parseable verdict line — non-review agents `AGENT-VERDICT: COMPLETE | PARTIAL | BLOCKED`; review agents the `**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES` line from the review format. Treat a missing verdict as `PARTIAL` and surface any `BLOCKED` before synthesizing. This makes aggregation deterministic.
+**Return contract:** request that each consulted skill end its response with a bounded executive summary (question addressed, principal finding, any blocker) and a final machine-parseable verdict line — non-review agents `AGENT-VERDICT: COMPLETE | PARTIAL | BLOCKED`; review agents the `**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES | UNABLE_TO_REVIEW` line from the review format. Treat a missing non-review verdict as `PARTIAL`, a missing review verdict as `NEEDS_CHANGES` (fail-closed), and surface any `BLOCKED`/`UNABLE_TO_REVIEW` before synthesizing; the orchestrator builds a per-agent claims table (agent, claim, verdict, basis) before writing synthesized prose. This makes aggregation deterministic.
+
+A crashed or empty-output sub-agent counts as `BLOCKED` — record it in the Agent Efficacy Report, never silently drop it or backfill with a replacement agent without telling the user.
 
 When research recommends an external library or tool, include a **liveliness assessment**: status (Active / Maintenance-only / Stale / Abandoned), last release, commit activity, risk level (Low / Medium / High). Do not recommend Abandoned projects without justification and a mitigation plan.
 
@@ -80,7 +88,7 @@ Research Parallelism is the *divergence* shape (different skills, different angl
 
 - Minimum N is 3 (N=2 forces escalation); default 3. Parallel on Claude Code surfaces; sequential on Claude.ai chat — the ladder still applies.
 - **Variance caveat:** identical low-variance answers are one sample repeated, not consensus — treat them as N=1 and escalate, don't report false agreement.
-- Aggregation ladder: unanimous → adopt; majority (strict, of non-blocked returns) → adopt with documented dissent; even split → **stop and escalate to the user** (do not add runs to break the tie); singleton-novel → adopt the majority and append the novel point as a credited addendum (additive, never a veto).
+- Aggregation ladder: compute effective N by dropping `BLOCKED`/`UNABLE_TO_REVIEW`/missing-verdict responses; escalate to the user (no ladder branch) when more than half of N were dropped OR effective N < 3. Otherwise: unanimous → adopt; majority (strict, of non-dropped returns) → adopt with documented dissent; even split → **stop and escalate to the user** (do not add runs to break the tie); singleton-novel → adopt the majority and append the novel point as a credited addendum (additive, never a veto) — the objective test for "material" is whether the singleton's concern would change the recommended action if incorporated.
 - Reserve it — replication costs N× tokens; it is not a routine quality gate.
 
 ### Sub-Agent Obligations
@@ -151,7 +159,7 @@ Merge method depends on the PR target:
 
 Do not rebase merge for either target. Do not merge `main` back to `dev`.
 
-Branch protection uses repository Rulesets with no bypass actors (administrators included — every change goes through a PR). `dev`: require PR (0 approvals), squash-only, linear history, block force-push and deletion, required checks `validate` + `lint-pr-title` + `artifact-review-guard` + `secrets-scan`. `main`: require PR (0 approvals), merge-commit-only, block force-push and deletion, required check `validate`, no linear history. No org- or enterprise-level rulesets are inherited, so solo `dev` → `main` promotions take the normal PR path with no owner-bypass ceremony.
+Branch protection uses repository Rulesets with no bypass actors (administrators included — every change goes through a PR). `dev`: require PR (0 approvals), squash-only, linear history, block force-push and deletion, required checks `validate` + `lint-pr-title` + `artifact-review-guard` + `secrets-scan` + `zizmor` + `codeql` + `tests` + `bash32-compat`. `main`: require PR (0 approvals), merge-commit-only, block force-push and deletion, required check `validate`, no linear history. No org- or enterprise-level rulesets are inherited, so solo `dev` → `main` promotions take the normal PR path with no owner-bypass ceremony.
 
 ### Conventional Commits
 
@@ -245,10 +253,10 @@ Every review pass — dedicated review agent, linter, or self-review — uses th
 **Verdict** — end every review with a machine-readable verdict line:
 
 ```markdown
-**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES
+**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES | UNABLE_TO_REVIEW
 ```
 
-PASS = no findings or Info-only. PASS_WITH_WARNINGS = Warnings but no Critical/Error. NEEDS_CHANGES = one or more Critical/Error.
+PASS = no findings or Info-only. PASS_WITH_WARNINGS = Warnings but no Critical/Error. NEEDS_CHANGES = one or more Critical/Error. UNABLE_TO_REVIEW = the review is genuinely impossible to perform (not merely large, complex, or uncertain) — treated like `BLOCKED` downstream. A response with no `**Verdict:**` line at all is fail-closed to `NEEDS_CHANGES`, never `PASS`.
 
 Does not apply to exploratory research, question-answering, or trivial single-file checks where prose is more appropriate.
 

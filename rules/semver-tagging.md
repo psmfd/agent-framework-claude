@@ -4,6 +4,8 @@ description: 'Use SemVer release tags aligned with Conventional Commits version 
 
 # SemVer Tagging
 
+**Enforcement:** CI release.yml (semantic-release on main pushes); self-report only (manual annotated-tag discipline)
+
 All repositories in the ecosystem use Semantic Versioning for release tags, with version bumps derived from Conventional Commits types.
 
 ## Tag Format

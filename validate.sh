@@ -27,6 +27,11 @@ fi
 
 DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Deterministic collation/classification regardless of host locale: sort order
+# feeds ADR-numbering and catalog comparisons, and CI/dev machines differ in
+# their default locale. The script never localizes output, so this is safe.
+export LC_ALL=C
+
 # --- Counters ---
 error_count=0
 warn_count=0
@@ -333,8 +338,8 @@ check_adrs() {
 # --- Check branch PR state ---
 check_branch_pr_state() {
   # Skip if gh is not available or not in a git repo
-  command -v gh >/dev/null 2>&1 || return
-  git rev-parse --git-dir >/dev/null 2>&1 || return
+  command -v gh >/dev/null 2>&1 || return 0
+  git rev-parse --git-dir >/dev/null 2>&1 || return 0
 
   local branch
   branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
@@ -343,9 +348,15 @@ check_branch_pr_state() {
   # Skip default branches — they never have PRs targeting themselves
   [[ "$branch" == "main" || "$branch" == "master" ]] && return
 
-  # Check if a merged PR exists for this branch
-  local pr_num
-  pr_num="$(gh pr list --head "$branch" --state merged --json number --jq '.[0].number // empty' 2>/dev/null || true)"
+  # Check if a merged PR exists for this branch. A gh failure (network, auth,
+  # rate limit) is a visible SKIP, not a silent pass — "no merged PR" and
+  # "could not check" must be distinguishable in the output.
+  local pr_num rc=0
+  pr_num="$(gh pr list --head "$branch" --state merged --json number --jq '.[0].number // empty' 2>/dev/null)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    skip "branch" "gh pr list failed for branch '$branch' — network or auth unavailable; merged-branch check skipped"
+    return
+  fi
 
   if [[ -n "$pr_num" ]]; then
     warn "branch" "PR #${pr_num} for branch '$branch' is already merged — create a new branch for additional changes"
@@ -357,11 +368,15 @@ check_branch_pr_state() {
 # environment (CI sets GH_TOKEN/GITHUB_TOKEN) and for non-github.com remotes.
 # See ADR-052 and docs/multi-account-git-identity.md.
 check_gh_identity() {
-  command -v gh >/dev/null 2>&1 || return
-  git rev-parse --git-dir >/dev/null 2>&1 || return
+  command -v gh >/dev/null 2>&1 || return 0
+  git rev-parse --git-dir >/dev/null 2>&1 || return 0
 
-  # A token in the environment overrides keyring accounts — skip to avoid CI noise.
-  [[ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]] && return
+  # A token in the environment overrides keyring accounts — skip to avoid CI
+  # noise, but say so: a silent return is indistinguishable from "checked OK".
+  if [[ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]]; then
+    skip "gh-identity" "GH_TOKEN/GITHUB_TOKEN present — identity check not applicable under a scoped token"
+    return
+  fi
 
   local remote_url
   remote_url="$(git remote get-url origin 2>/dev/null || true)"
@@ -370,12 +385,12 @@ check_gh_identity() {
   # Only plain github.com remotes; SSH host aliases and GHES are out of scope.
   case "$remote_url" in
     *github.com[:/]*) ;;
-    *) return ;;
+    *) return 0 ;;
   esac
 
   local slug
   slug="$(printf '%s' "$remote_url" | sed -E 's/(\.git)$//; s#.*github\.com[:/]([^/]+/[^/]+)$#\1#')"
-  [[ "$slug" == */* ]] || return
+  [[ "$slug" == */* ]] || return 0
 
   if gh api "repos/${slug}" --silent >/dev/null 2>&1; then
     ok "gh-identity" "active gh account can resolve ${slug}"
@@ -388,11 +403,10 @@ check_gh_identity() {
 
 # --- Check agent catalog in AGENTS.md ---
 check_agent_catalog() {
-  # Delegates to the canonical drift gate (ADR-062). scripts/regen-agent-catalog.sh
-  # --check owns what the former inline checks did (name presence vs agents/*.md
-  # and routing-mirror parity) PLUS column-content drift: Domain/Use-when across
-  # AGENTS.md and the routing mirror (rules/agent-first-selection.md), and README
-  # Tier/Model. AGENTS.md is the canonical source.
+  # Delegates to the canonical drift gate (ADR-062, mirror retired by ADR-085).
+  # scripts/regen-agent-catalog.sh --check verifies name presence vs agents/*.md,
+  # that rules/agent-first-selection.md carries the AGENTS.md pointer (and no
+  # reintroduced table copy), and README Tier/Model. AGENTS.md is canonical.
   local script="$DOTFILES_DIR/scripts/regen-agent-catalog.sh"
   if [[ ! -x "$script" ]]; then
     warn "catalog" "scripts/regen-agent-catalog.sh missing or not executable — skipping catalog drift check"
@@ -408,11 +422,11 @@ check_agent_catalog() {
   done < <(printf '%s\n' "$out" | sed -n 's/^WARN  \[[^]]*\] //p')
 
   if [[ $rc -eq 0 ]]; then
-    ok "catalog" "Agent catalog consistent (AGENTS.md canonical; routing mirror + README tier/model checked)"
+    ok "catalog" "Agent catalog consistent (AGENTS.md canonical; routing pointer + README tier/model checked)"
   else
     # Surface the drift detail (stderr, per output conventions), fold into one error.
     printf '%s\n' "$out" | grep '^ERROR' >&2 || true
-    error "catalog" "Agent catalog drift — run: scripts/regen-agent-catalog.sh --write (README tier/model fixed by hand)"
+    error "catalog" "Agent catalog drift — AGENTS.md is canonical; fix it (and README tier/model) by hand, see scripts/regen-agent-catalog.sh --check output"
   fi
 }
 
@@ -578,20 +592,16 @@ check_web_sync_drift() {
   fi
 
   if [[ -z "$base" ]]; then
-    detail "no diff base reachable (origin/dev or @{upstream}); manifest layer skipped"
-    if [[ $warn_count -eq $warn_start ]]; then
-      ok "web-sync" "no Skill Catalog drift detected (heuristic only)"
-    fi
+    # "Unable to verify" must not read as "verified clean" — emit a visible
+    # SKIP instead of an OK so runs on shallow/untracked clones are auditable.
+    skip "web-sync" "manifest layer skipped — no diff base reachable (origin/dev or @{upstream}); heuristic layer only"
     return
   fi
 
   local head_sha=""
   head_sha=$(git -C "$DOTFILES_DIR" rev-parse HEAD 2>/dev/null) || head_sha=""
   if [[ -z "$head_sha" ]] || [[ "$head_sha" == "$base" ]]; then
-    detail "HEAD is at the diff base; manifest layer skipped (no commits since base)"
-    if [[ $warn_count -eq $warn_start ]]; then
-      ok "web-sync" "no Skill Catalog drift detected (heuristic only)"
-    fi
+    skip "web-sync" "manifest layer skipped — HEAD is at the diff base (no commits since base); heuristic layer only"
     return
   fi
 
@@ -1021,6 +1031,78 @@ check_documentation() {
   fi
 }
 
+# --- Check lockstep duplication between hook pairs (ADR-083) ---
+# The secret-pattern set and the identity-helper functions are deliberately
+# duplicated across the two guard-hook pairs (ADR-053/ADR-054: no shared
+# source for security-critical hooks) with "keep in lockstep" comments. This
+# check makes the lockstep mechanical: byte-identical or ERROR. Drift in one
+# hook of a pair silently weakens the layer it belongs to, so this is
+# ERROR-gated like check_shellcheck and check_frozen_scripts.
+# NOTE: extract_host() is NOT in the lockstep set — it exists only in the
+# pre-push hook today (#17); add it here when #17 lands it in the session hook.
+
+# Extract a named shell function body from a file. Matches the repo's two
+# function shapes: a one-liner (`name() { ...; }` on one line) or a multi-line
+# body whose closing `}` sits alone at column 0. Exits non-zero if the
+# function is not found in either shape — callers must treat that as a loud
+# failure, never as an empty-vs-empty match.
+extract_function() {
+  local file="$1" fn="$2"
+  awk -v fn="$fn" '
+    !infn && index($0, fn "() {") == 1 {
+      print
+      if ($0 ~ /\}[[:space:]]*$/) { found = 1; exit }
+      infn = 1
+      next
+    }
+    infn { print; if ($0 == "}") { found = 1; exit } }
+    END { exit found ? 0 : 1 }
+  ' "$file"
+}
+
+# Compare one extraction target across a hook pair.
+#   $1 = target kind: "var" (grep ^NAME=) or "func" (extract_function)
+#   $2 = target name, $3/$4 = the two files (repo-relative)
+lockstep_compare() {
+  local kind="$1" name="$2" file_a="$3" file_b="$4"
+  local a b
+  if [[ "$kind" == "var" ]]; then
+    a="$(grep -E "^${name}=" "$DOTFILES_DIR/$file_a" || true)"
+    b="$(grep -E "^${name}=" "$DOTFILES_DIR/$file_b" || true)"
+  else
+    a="$(extract_function "$DOTFILES_DIR/$file_a" "$name" || true)"
+    b="$(extract_function "$DOTFILES_DIR/$file_b" "$name" || true)"
+  fi
+
+  if [[ -z "$a" || -z "$b" ]]; then
+    error "lockstep" "$name not found in expected form in ${file_a} and/or ${file_b} — extractor cannot verify lockstep"
+    return
+  fi
+  if [[ "$a" == "$b" ]]; then
+    ok "lockstep" "$name byte-identical across ${file_a##*/} / ${file_b##*/}"
+  else
+    error "lockstep" "$name drift between ${file_a} and ${file_b} — the pair must stay byte-identical (ADR-053/ADR-054)"
+  fi
+}
+
+check_lockstep_duplication() {
+  local secrets_a="hooks/secrets-guard.sh" secrets_b="hooks/session-secrets-guard.sh"
+  local ident_a="hooks/gh-identity-guard.sh" ident_b="hooks/session-gh-identity-guard.sh"
+  local f
+  for f in "$secrets_a" "$secrets_b" "$ident_a" "$ident_b"; do
+    if [[ ! -f "$DOTFILES_DIR/$f" ]]; then
+      error "lockstep" "$f missing — cannot verify hook-pair lockstep"
+      return
+    fi
+  done
+
+  lockstep_compare var  SECRET_PATTERNS  "$secrets_a" "$secrets_b"
+  lockstep_compare var  GH_LOGIN_RE      "$ident_a" "$ident_b"
+  lockstep_compare func sanitize         "$ident_a" "$ident_b"
+  lockstep_compare func is_valid_login   "$ident_a" "$ident_b"
+  lockstep_compare func parse_owner_repo "$ident_a" "$ident_b"
+}
+
 # --- Check symlinks ---
 check_frozen_scripts() {
   local pin_file="$DOTFILES_DIR/scripts/wim/.frozen-shas"
@@ -1166,6 +1248,10 @@ main() {
 
   echo "Lib Self-Tests:"
   check_lib_selftests
+  echo ""
+
+  echo "Lockstep:"
+  check_lockstep_duplication
   echo ""
 
   # Documentation

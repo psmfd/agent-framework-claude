@@ -131,8 +131,8 @@ is_valid_login() { [ "${#1}" -le 39 ] && [[ "$1" =~ $GH_LOGIN_RE ]]; }
 parse_owner_repo() {
   local url="$1" path
   case "$url" in
-    *://*) path="${url#*://}"; path="${path#*/}" ;;
-    *:*)   path="${url#*:}" ;;
+    *://*) path="${url#*://}"; path="${path#*/}" ;;   # strip scheme + host[:port]/
+    *:*)   path="${url#*:}" ;;                          # scp-style host:owner/repo
     *)     return 1 ;;
   esac
   path="${path%.git}"; path="${path%/}"

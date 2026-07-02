@@ -4,6 +4,8 @@ description: 'Fail-closed guard against pushing or mutating GitHub from the wron
 
 # GitHub Identity Guard
 
+**Enforcement:** PreToolUse hook session-gh-identity-guard.sh; pre-push hook gh-identity-guard.sh; validate.sh check_gh_identity (warn-only preflight)
+
 On a host authenticated to more than one GitHub account, `gh` acts as the globally-active account and never auto-selects one from a repository's remote. When the active account is wrong for the target repo, a `git push` or mutating `gh` call is attributed to — or fails against — the wrong account. This is a real, recurring incident class on multi-account developer hosts, where the active account can silently drift between (or within) sessions to an account that is not the repo's owner.
 
 Two fail-closed layers share one signal model and one set of overrides. They complement the warn-only `validate.sh` preflight from ADR-052 (which stays as an early-development signal) by *blocking* the operation.
