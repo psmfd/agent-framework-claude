@@ -191,7 +191,7 @@ Node.js backend (Express, Fastify, NestJS) and modern frontend (React, Next.js).
 **Prototype pollution:**
 
 - `Object.assign({}, defaults, userBody)` — `__proto__` keys in `userBody` mutate `Object.prototype`.
-- `_.merge(target, userInput)` in lodash &lt; 4.17.21 (CVE-2020-8203). Even patched versions need explicit key filtering or `Object.create(null)` targets.
+- `_.merge(target, userInput)` in lodash < 4.17.21 (CVE-2020-8203). Even patched versions need explicit key filtering or `Object.create(null)` targets.
 - `JSON.parse('{"__proto__":...}')` piped to any merge utility — the `__proto__` key survives parsing and is treated as a prototype assignment.
 - `obj[userKey][userKey2] = value` — depth attack that `__proto__`-only filtering misses.
 
