@@ -25,7 +25,7 @@ Invoke the `Agent` tool **three times in a single message** so the subagents run
 - **security-review-expert** — "Security review of the diff `<base>..HEAD` in `<absolute-repo-path>`. Map trust boundaries; identify auth/authz/secret/crypto concerns; cite first-party docs. Produce findings per `rules/structured-review-format.md`."
 - **linter** — "Lint the files changed in `<base>..HEAD` in `<absolute-repo-path>`. Run the appropriate linter per file type in report-only mode."
 
-Each review agent ends with the `**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES` line defined in [structured-review-format.md](../rules/structured-review-format.md). An agent that cannot proceed returns `BLOCKED` per the Return Contract in [research-parallelism.md](../rules/research-parallelism.md) — surface that to the user rather than synthesizing around it.
+Each review agent ends with the `**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES | UNABLE_TO_REVIEW` line defined in [structured-review-format.md](../rules/structured-review-format.md). An agent that cannot proceed returns `BLOCKED` per the Return Contract in [research-parallelism.md](../rules/research-parallelism.md), or `UNABLE_TO_REVIEW` per the review format when it can proceed as an agent but cannot form a review judgment — surface either to the user rather than synthesizing around it.
 
 ## Step 3 — Synthesize the merged report
 
@@ -55,11 +55,12 @@ When all three return, produce a single output. Because reviewers are merged int
 
 Aggregate verdict is **most-severe-wins** (command-local synthesis policy):
 
+- Any reviewer reporting `UNABLE_TO_REVIEW` → surface to the user before computing an aggregate verdict; do not silently drop that reviewer's lane from the table or fold it into a `PASS`. Resolve the blocker (re-scope the diff, fix the ref) and re-run that reviewer, or present the partial two-reviewer result with the gap stated explicitly.
 - Any reviewer reports `NEEDS_CHANGES` → aggregate is `NEEDS_CHANGES`.
 - Otherwise any `PASS_WITH_WARNINGS` → aggregate is `PASS_WITH_WARNINGS`.
 - Otherwise `PASS`.
 
-This is a divergence fan-out (three different agents, different lenses), so the aggregation ladder in `consensus-by-replication.md` does not apply — that ladder governs replication of one agent on identical prompts.
+This is a divergence fan-out (three different agents, different lenses) using a command-local most-severe-wins synthesis policy — the replication ladder in `consensus-by-replication.md` does not apply here because the agents are different, not identical. See the Fan-Out Shapes and Aggregation Policy table in [orchestrator-protocol.md](../rules/orchestrator-protocol.md) for the full comparison.
 
 ## Constraints
 

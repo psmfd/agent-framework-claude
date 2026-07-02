@@ -105,7 +105,7 @@ Use `scripts/scaffold.sh agent <name>` to create `agents/<name>.md` from the tem
 
 Use `scripts/scaffold.sh rule <name>` to create `rules/<name>.md` from the template. Then:
 
-1. Fill in the rule's behavioral guidance in the scaffolded `rules/<name>.md`.
+1. Fill in the rule's behavioral guidance in the scaffolded `rules/<name>.md`, including the `**Enforcement:**` line (see the Rules frontmatter section below for the format and vocabulary).
 
 2. Update README.md — add an H3 entry to "Current Rules" and add `rules/<name>.md` to the README directory tree (not checked by `validate.sh` — hand-verify).
 
@@ -163,6 +163,8 @@ paths:
 | `paths` | Optional | YAML list of glob patterns |
 
 Rules without `paths` apply universally.
+
+Every rule body carries an `**Enforcement:**` line immediately after its `# Title` (before the first paragraph), stating what mechanism — if any — actually gates the behavior the rule describes: `PreToolUse hook <name>`, `pre-commit hook <name>`, `pre-push hook <name>`, `validate.sh <check>`, `CI <workflow>.yml`, `GitHub Ruleset <name>`, or `self-report only`. List multiple mechanisms with `; ` when more than one applies. `self-report only` documents current enforcement reality — it does not diminish the rule's mandatory status. A rule with no automated check is exactly the kind of rule where the self-review diligence in `post-implementation-review.md` matters most. See ADR-084.
 
 ## PR Review
 
