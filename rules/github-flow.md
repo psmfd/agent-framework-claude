@@ -4,6 +4,8 @@ description: 'Use GitHub Flow branching with dev as integration branch, squash m
 
 # GitHub Flow
 
+**Enforcement:** GitHub Ruleset protect-dev; GitHub Ruleset protect-main; CI validate.yml; CI lint-pr-title.yml; CI merge-method-check.yml (advisory PR comment only — not a blocking check)
+
 All repositories in the ecosystem follow GitHub Flow: short-lived feature branches merged via PR into a single integration branch.
 
 ## Branches

@@ -4,6 +4,8 @@ description: 'Use Debian 13 (Trixie) as the assumed Linux distribution for all s
 
 # Debian Baseline
 
+**Enforcement:** self-report only
+
 All agent framework rules, guidance, and examples that reference Linux distributions assume **Debian 13 (Trixie)** as the baseline.
 
 ## When This Rule Applies

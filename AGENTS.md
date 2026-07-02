@@ -103,14 +103,14 @@ Significant decisions are recorded in `adrs/` using the MADR minimal format. See
 
 You operate as an orchestrator by default. This is mandatory session-level behavior. It is not optional. It is not something you may skip because a task "seems simple." Two rules define your orchestration responsibilities — you MUST apply them as a unified protocol:
 
-1. **Agent-First Selection** — route to custom agents before general-purpose. Check EVERY agent in the catalog — tasks frequently touch multiple domains. Using a general-purpose agent when a custom agent covers the domain is a protocol violation.
+1. **Agent-First Selection** — route to custom agents before general-purpose. Check EVERY agent in the catalog — tasks frequently touch multiple domains. Using a general-purpose agent when a custom agent covers the domain is a protocol violation. If a named `subagent_type` does not resolve, fall back to general-purpose with the same brief and file a catalog-drift issue (see `rules/agent-first-selection.md`).
 2. **Research Parallelism** — fan out to 3+ parallel agents for research tasks. Produce Agent Efficacy Reports. Fewer than 3 is a violation unless fewer than 3 relevant agents exist.
 
 **Mandatory task classification:** Before acting on ANY task, explicitly classify it as Research, Implementation, or Exempt. State the classification to the user. Silent classification is a protocol violation. If uncertain, classify UP, never down.
 
 **Session workflow:** Route (check catalog) → Delegate (brief each agent with question, context, expected output form, and the required return contract — a bounded executive summary plus the terminal verdict line) → Collect (wait for all agents) → Synthesize (combine results, produce efficacy report).
 
-**Narrow exemptions (the ONLY valid reasons to skip):** operating as a subagent, a literal single tool invocation (one specific file read or grep the user named), or direct implementation of an already-approved plan. "This seems simple," "I can handle this directly," and "this is just a quick operational task" are NOT valid exemptions.
+**Narrow exemptions (the ONLY valid reasons to skip):** operating as a subagent; a literal single tool invocation (one specific file read or grep the user named); direct implementation of an already-approved plan; or a **verified single-fact lookup** — one objectively correct answer from a single named, already-available (or one-call-obtainable) authoritative source, requiring zero synthesis, not itself a decision/recommendation, with a bounded and immediately correctable blast radius (all four required — see `rules/orchestrator-protocol.md`). "This seems simple," "I can handle this directly," and "this is just a quick operational task" are NOT valid exemptions — they satisfy none of the four criteria above.
 
 ## Development Conventions
 

@@ -1,8 +1,10 @@
 ---
-description: 'Prefer custom skill agents over general-purpose agents for domain-specific tasks'
+description: 'Prefer custom skill agents over general-purpose agents for domain-specific tasks, with a defined fallback and catalog-drift filing when a subagent_type does not resolve'
 ---
 
 # Agent-First Selection
+
+**Enforcement:** validate.sh check_agent_catalog (catalog table accuracy only, not routing behavior); self-report only (routing decisions)
 
 Custom agents exist because they encode domain expertise, known fragilities, and validated patterns that general-purpose agents lack. Using a general-purpose agent when a custom agent covers the domain is a protocol violation — it discards curated knowledge in favor of generic reasoning.
 
@@ -44,6 +46,16 @@ Before delegating work to an agent, follow this protocol strictly:
 | `aws-msk-expert` | AWS MSK | Amazon MSK provisioned vs serverless, broker sizing/storage, auth modes (IAM/SASL-SCRAM/mTLS), MSK Connect, MSK Replicator, version management |
 | `kafka-developer-expert` | Kafka development | Producer/consumer dev for Kafka 4.x, delivery semantics, idempotence/transactions, consumer groups/rebalance, partition design, client auth |
 | `kafka-self-managed-expert` | Self-managed Kafka | Kafka 4.x on Kubernetes, Strimzi and first-party operators, KRaft, storage, HA, cluster admin, encryption/auth |
+
+## Unresolvable Agent Type
+
+If a delegation targets a `subagent_type` this catalog does not list — the name was mistyped, the agent was renamed or removed, or the catalog and the actual `agents/` directory have drifted (see the Documentation Sync Map in `CONTRIBUTING.md`) — do not silently drop the perspective from the fan-out and do not guess a near-miss name:
+
+1. **Fall back to a general-purpose agent** carrying the identical brief (question, context, expected return contract) the custom agent would have received. The fallback counts toward the divergence minimum only under the same rule as any general-purpose substitution — see "What Counts Toward the Minimum" in `research-parallelism.md`.
+2. **File a catalog-drift issue** per `file-issues-first.md` (plan step 1 if discovered during planning; otherwise file it immediately) — title it `catalog drift: <requested-name> not found in agents/`, body naming the requested name, the task that triggered it, and whether the likely cause is a typo, rename, or removal. Do not silently correct the catalog yourself mid-task — a corrected catalog is a separate reviewed change.
+3. **Continue the current task** with the fallback response; the drift issue is a tracked follow-up, not a blocker for the task in progress.
+
+This procedure applies only when the named `subagent_type` genuinely does not exist. It is not a way to avoid agent-first routing by treating an existing catalog match as "close enough to skip" — if a matching custom agent exists under a discoverable name, use it; the fallback and catalog-drift issue are for genuine absence, not routing friction.
 
 ## Narrow Exemptions
 

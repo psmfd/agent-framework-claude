@@ -4,6 +4,8 @@ description: 'Require an approved implementation plan before any code changes ar
 
 # No Code Changes Without an Approved Plan
 
+**Enforcement:** self-report only
+
 Before writing, editing, or deleting any code:
 
 - **Create an implementation plan** and present it to the user for review.

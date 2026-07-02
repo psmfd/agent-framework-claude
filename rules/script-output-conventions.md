@@ -4,6 +4,8 @@ description: 'Standardize output format, exit codes, and summary blocks for all 
 
 # Script Output Conventions
 
+**Enforcement:** validate.sh check_lib_selftests (scripts/lib conformance only); self-report only (per-script adoption)
+
 All shell scripts produced, suggested, or designed by the agent framework must follow these output conventions. This is the default standard — target project conventions take precedence when they exist.
 
 ## Output Labels

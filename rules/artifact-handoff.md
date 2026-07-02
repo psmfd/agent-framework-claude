@@ -4,6 +4,8 @@ description: 'Write large review artifacts to the tracked .review/ handoff chann
 
 # Artifact Handoff
 
+**Enforcement:** CI artifact-review-guard.yml
+
 When an agent or the orchestrator produces a large artifact that needs
 line-anchored human review — an ADR draft, a synthesized multi-reviewer report,
 an evidence payload — write it to the tracked `.review/` directory rather than
