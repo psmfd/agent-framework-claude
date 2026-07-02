@@ -1,0 +1,76 @@
+# Weekly staleness check for workflow-embedded container digest pins (#15).
+# Dependabot's docker ecosystem cannot see image refs inside workflow YAML
+# (dependabot-core #5541), so pins like secrets-scan.yml's gitleaks digest
+# never get update PRs. This job resolves each pinned tag's current digest
+# via skopeo (preinstalled; anonymous ghcr reads) and on genuine drift files
+# or refreshes ONE idempotent 'pin-drift'-labeled issue per image — a red
+# scheduled run is reserved for indeterminate failures (registry unreachable,
+# malformed pin), never for drift itself.
+name: pin-drift-check
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check-pins:
+    name: check-pins
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Check embedded digest pins
+        id: scan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          out="$(scripts/check-pin-drift.sh)"; rc=$?
+          printf '%s\n' "$out"
+          # Indeterminate (rc=2): fail the run, file nothing.
+          [ "$rc" = "2" ] && exit 2
+
+          repo="$GITHUB_REPOSITORY"
+          printf '%s\n' "$out" | while read -r status wf ref pinned current; do
+            case "$status" in
+              DRIFT)
+                title="pin-drift: ${ref} in ${wf}"
+                existing="$(gh issue list --repo "$repo" --label pin-drift --state open \
+                  --search "\"${ref}\" in:title" --json number --jq '.[0].number // empty')"
+                # shellcheck disable=SC2016  # backticks are markdown literals, not expansions
+                body="$({
+                  printf 'Workflow-embedded digest pin is stale.\n\n'
+                  printf -- '- Workflow: `.github/workflows/%s`\n' "$wf"
+                  printf -- '- Image: `%s`\n' "$ref"
+                  printf -- '- Pinned digest: `%s`\n' "$pinned"
+                  printf -- '- Current tag digest: `%s`\n\n' "$current"
+                  printf 'Replace the pinned digest (and bump the adjacent `# %s` comment ' "$ref"
+                  printf 'if the tag itself moved). Detected by pin-drift-check.yml; this issue '
+                  printf 'is updated on rescan and auto-closed when the pin matches again.\n'
+                })"
+                if [ -n "$existing" ]; then
+                  gh issue edit "$existing" --repo "$repo" --body "$body"
+                else
+                  gh issue create --repo "$repo" --title "$title" --label pin-drift --body "$body"
+                fi
+                ;;
+              CURRENT)
+                existing="$(gh issue list --repo "$repo" --label pin-drift --state open \
+                  --search "\"${ref}\" in:title" --json number --jq '.[0].number // empty')"
+                if [ -n "$existing" ]; then
+                  gh issue close "$existing" --repo "$repo" \
+                    --comment "Pin for ${ref} matches the current tag digest again — auto-closing."
+                fi
+                ;;
+            esac
+          done
+          exit 0
