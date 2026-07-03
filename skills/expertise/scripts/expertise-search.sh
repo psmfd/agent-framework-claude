@@ -213,9 +213,9 @@ case "$http_code" in
   429)
     retry_after="$(awk 'tolower($1)=="retry-after:" { gsub(/\r/,"",$2); print $2; exit }' "$resp_headers_file")"
     if [ -n "$retry_after" ]; then
-      err "rate-limit" "HTTP 429 — rate limited (10 req/min); retry after ${retry_after}s. Do not retry immediately."
+      err "rate-limit" "HTTP 429 — rate limited; retry after ${retry_after}s (per the server's Retry-After header). Do not retry immediately."
     else
-      err "rate-limit" "HTTP 429 — rate limited (10 req/min). Do not retry immediately."
+      err "rate-limit" "HTTP 429 — rate limited by the server. Do not retry immediately."
     fi
     cat "$body_file" >&2
     exit 6
