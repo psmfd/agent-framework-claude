@@ -93,6 +93,13 @@ info "5-7: base URL gates"
 run_sut 3 "non-loopback" EXPERTISE_SEARCH_URL="http://example.com:8080" -- "q"
 run_sut 2 "no-scheme" EXPERTISE_SEARCH_URL="127.0.0.1:8080" -- "q"
 run_sut 3 "userinfo" EXPERTISE_SEARCH_URL="http://user@127.0.0.1:8080" -- "q"
+# Non-http(s) scheme must be refused (exit 3) even when the host is loopback —
+# blocks curl-supported smuggling schemes (gopher/dict/file) reaching curl.
+run_sut 3 "scheme-gopher" EXPERTISE_SEARCH_URL="gopher://127.0.0.1:6379/x" -- "q"
+run_sut 3 "scheme-file" EXPERTISE_SEARCH_URL="file://127.0.0.1/etc/passwd" -- "q"
+# A '@' in the PATH (not userinfo) with a loopback host must not be misread as
+# userinfo — it fails later on readiness (exit 4), not the userinfo gate (3).
+run_sut 4 "at-in-path" EXPERTISE_SEARCH_API_KEY="$TEST_TOKEN" EXPERTISE_SEARCH_URL="http://127.0.0.1:1/foo@bar" -- "q"
 
 info "8: config file permission refusal"
 mkdir -p "$WORK/home/.config/expertise-search"

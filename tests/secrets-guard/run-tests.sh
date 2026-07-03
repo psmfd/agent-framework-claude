@@ -9,6 +9,10 @@
 #   3. vault file staged without a header, working tree given a valid header
 #   4. file renamed into a vault name with an unencrypted body (ACMR filter)
 #   5. PKCS#8 encrypted private-key header (the ENCRYPTED PRIVATE KEY alternative)
+#   6. signed JWT (ADR-095)
+#   7. Authorization: Bearer literal (ADR-095)
+#   8. lowercase authorization/bearer casing still blocks (RFC 7230 case-insensitivity)
+#   9. bearer format placeholders pass (false-positive control)
 # Plus a positive control: a clean staged file must pass (no false positive).
 #
 # Each case builds a throwaway git repo and runs the hook against the staged
@@ -144,6 +148,15 @@ case_bearer_blocked() {
   expect_block "bearer-blocked" "$(run_hook "$d")"
 }
 
+# Case 8b — lowercase header/scheme casing must still match (RFC 7230 header
+# names are case-insensitive; detector made case-tolerant in the pre-v0.4.0 review).
+case_bearer_lowercase_blocked() {
+  local d; d="$(new_repo)"
+  printf '%s: bearer abcdef1234567890ABCDEF12345\n' "authorization" > "$d/lower.txt"
+  git -C "$d" add lower.txt
+  expect_block "bearer-lowercase-blocked" "$(run_hook "$d")"
+}
+
 # Case 9 — bearer format placeholders must NOT match (false-positive control).
 case_bearer_placeholder_passes() {
   local d rc; d="$(new_repo)"
@@ -172,6 +185,7 @@ case_rename_vault
 case_pkcs8_encrypted
 case_jwt_blocked
 case_bearer_blocked
+case_bearer_lowercase_blocked
 case_bearer_placeholder_passes
 case_clean_passes
 

@@ -112,14 +112,21 @@ BASE_URL="${EXPERTISE_SEARCH_URL:-}"
 [ -n "$BASE_URL" ] || BASE_URL="$DEFAULT_BASE_URL"
 BASE_URL="${BASE_URL%/}"
 
-host_port="${BASE_URL#*://}"
-case "$host_port" in
-  "$BASE_URL")
-    err "config" "EXPERTISE_SEARCH_URL has no scheme: $BASE_URL"; exit 2 ;;
-  *@*)
-    err "config" "userinfo in EXPERTISE_SEARCH_URL is not supported"; exit 3 ;;
+# Scheme allowlist: refuse anything but http/https BEFORE the host check, so a
+# curl-supported smuggling scheme (gopher://, dict://, file://, …) can never
+# reach curl even when its host component is loopback. Defense in depth with
+# --proto on the curl calls below.
+case "$BASE_URL" in
+  http://*|https://*) : ;;
+  *://*) err "config" "unsupported URL scheme in EXPERTISE_SEARCH_URL (http/https only): $BASE_URL"; exit 3 ;;
+  *)     err "config" "EXPERTISE_SEARCH_URL has no scheme: $BASE_URL"; exit 2 ;;
 esac
-host_port="${host_port%%/*}"
+
+host_port="${BASE_URL#*://}"
+host_port="${host_port%%/*}"        # strip path first so a '@' in the path is not read as userinfo
+case "$host_port" in
+  *@*) err "config" "userinfo in EXPERTISE_SEARCH_URL is not supported"; exit 3 ;;
+esac
 case "$host_port" in
   \[*\]*) host="${host_port%%\]*}]" ;;      # [::1] or [::1]:8080
   *)      host="${host_port%%:*}" ;;
@@ -169,7 +176,7 @@ restore_xtrace
 
 # --- Readiness gate (unauthenticated; never burns the rate budget) ----------
 
-ready_code="$(curl -sS -o /dev/null -w '%{http_code}' \
+ready_code="$(curl -sS --proto '=http,https' -o /dev/null -w '%{http_code}' \
   --connect-timeout "$CONNECT_TIMEOUT" --max-time "$CONNECT_TIMEOUT" \
   "${BASE_URL}/health/ready" 2>/dev/null)" || ready_code=""
 if [ "$ready_code" != "200" ]; then
@@ -180,7 +187,7 @@ fi
 # --- Search -----------------------------------------------------------------
 
 curl_rc=0
-http_code="$(curl -sS -G \
+http_code="$(curl -sS -G --proto '=http,https' \
   --connect-timeout "$CONNECT_TIMEOUT" --max-time "$MAX_TIME" \
   -H @"$header_file" \
   --data-urlencode "q=${QUERY}" \

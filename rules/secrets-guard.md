@@ -17,7 +17,7 @@ The hook iterates `git diff --cached --name-only --diff-filter=ACMR` (renames in
 * **AWS access key IDs** — `AKIA|ASIA|ABIA|ACCA` followed by 16 uppercase alphanumerics
 * **GitHub tokens** — `gh[oprsu]_[A-Za-z0-9]{36,}` (covers all five documented prefixes: `ghp_` classic PAT, `gho_` OAuth, `ghu_` user-to-server, `ghs_` server-to-server / Actions `GITHUB_TOKEN`, `ghr_` refresh) and `github_pat_[A-Za-z0-9_]{82,}` (fine-grained PAT). The body bound is open-ended because GitHub treats tokens as opaque and is rolling out a longer `ghs_` format (~520 chars) — a fixed length would silently miss new tokens (#211, ADR-057)
 * **Signed JWTs** — three dot-separated base64url segments where the header and payload both start `eyJ` (base64url `{"`), each 10+ characters with a 10+ character signature. Unsigned/`alg:none` tokens are deliberately out of scope — a two-segment match would flag ordinary base64 blobs (#64, ADR-095)
-* **Bearer-token literals** — `Authorization: Bearer` followed by 20+ contiguous token characters. Format placeholders (`%s`, `<key>`, `$VAR`) never reach the length bound, so code that builds the header from a variable — e.g. the `/expertise` helper script — does not match; a pasted opaque key does (#64, ADR-095)
+* **Bearer-token literals** — `Authorization: Bearer` (header name and scheme matched case-insensitively per RFC 7230 §3.2, so `authorization: bearer …` is caught too) followed by 20+ contiguous token characters. Format placeholders (`%s`, `<key>`, `$VAR`) never reach the length bound, so code that builds the header from a variable — e.g. the `/expertise` helper script — does not match; a pasted opaque key does (#64, ADR-095)
 * **Sensitive file paths** — file basenames `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519` (plus explicit `.pem` variants) and `id_ecdsa_sk`, `id_ed25519_sk` (FIDO2 hardware-backed keys, OpenSSH 8.2+; their `.pem` forms are caught by the `*.pem` glob below); also any `*.pem` or `*.key` file
 
 The hook does NOT detect inline `!vault |` scalars in partially-encrypted YAML files — that gap requires semantic YAML parsing and is out of scope for this hook.
@@ -26,7 +26,7 @@ The hook does NOT detect inline `!vault |` scalars in partially-encrypted YAML f
 
 `hooks/session-secrets-guard.sh` fires as a `PreToolUse` hook wired via `settings.json` (matcher `^(Bash|Write|Edit|MultiEdit|NotebookEdit)$`). It denies, before execution:
 
-* **Bash / execute** — an inline secret literal in the command (same pattern set as layer 1), or a read of a sensitive credential file (`~/.aws/credentials`, `~/.aws/config`, `~/.ssh/id_*`, `~/.kube/config`, `~/.netrc`, `~/.pgpass`, `~/.docker/config.json`).
+* **Bash / execute** — an inline secret literal in the command (same pattern set as layer 1), or a read of a sensitive credential file (`~/.aws/credentials`, `~/.aws/config`, `~/.ssh/id_*`, `~/.kube/config`, `~/.netrc`, `~/.pgpass`, `~/.docker/config.json`, `~/.config/expertise-search/config`).
 * **Write / create_file** — a write to a sensitive path (`id_rsa`, `*.pem`, `*.key`), a vault-named file whose content lacks the `$ANSIBLE_VAULT` header, or content matching a secret pattern.
 * **Edit / MultiEdit / NotebookEdit** — NEW content (`new_string` / `new_source`) matching a secret pattern. Replaced/old text is never scanned, so an edit that REMOVES a secret is never blocked.
 

@@ -36,12 +36,17 @@ near-zero false-positive cost:
    matches signed tokens (header.payload.signature; `eyJ` is base64url `{"`).
    Unsigned/`alg:none` tokens are deliberately out of scope — a bare
    two-segment match would flag base64 blobs and truncated examples.
-2. **Bearer literal** — `Authorization: Bearer [A-Za-z0-9._~+/=-]{20,}`
+2. **Bearer literal** — `[Aa]uthorization: [Bb]earer [A-Za-z0-9._~+/=-]{20,}`
    requires 20+ contiguous token characters after the header name, so
    `Bearer %s`, `Bearer <key>`, `Bearer $TOKEN`, and prose like "Bearer
-   literals" never match, while a pasted opaque key does. Verified: neither
-   alternative matches its own pattern text, so committing the hooks or the
-   rule documentation does not self-trip the guard.
+   literals" never match, while a pasted opaque key does. The header name and
+   scheme are matched case-insensitively (via `[Aa]`/`[Bb]` rather than
+   `grep -i`, which would loosen the other alternatives) because HTTP header
+   names are case-insensitive per RFC 7230 §3.2 and many clients emit
+   `authorization: bearer …` — a case-sensitive detector was a false-negative
+   caught in the pre-v0.4.0 review. Verified: neither alternative matches its
+   own pattern text, so committing the hooks or the rule documentation does
+   not self-trip the guard.
 3. Both alternatives verified on BSD (`/usr/bin/grep`) and PATH grep;
    existing skip surfaces (`*.example`, `tests/`, fixtures,
    `.secrets-guard-allowlist`, `SKIP_SECRETS_GUARD=1`) apply unchanged for
