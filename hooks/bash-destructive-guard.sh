@@ -11,6 +11,8 @@
 #     (env/sudo/xargs/time/nice/nohup/command/builtin) and their flags, so
 #     `env rm ...` / `sudo rm ...` / `xargs rm` are caught. `git rm`,
 #     `grep rm`, etc. are NOT flagged because the canonical verb is git/grep.
+#     Resolution is depth-capped at 8 wrappers; a chain still unresolved at
+#     the cap is denied outright (fail closed, #20).
 #   - Shell-interpreter `-c` invocations (bash/sh/dash/zsh/ksh/busybox) are
 #     denied.
 #   - `find ... -delete` / `-exec rm` / `-execdir rm` are denied.
@@ -157,6 +159,18 @@ while IFS= read -r seg; do
     done
   done
   cverb="${toks[$idx]:-}"
+
+  # Fail closed at the wrapper depth cap (#20): the loop's only exit path that
+  # leaves cverb equal to a wrapper verb is exhausting all 8 iterations with
+  # wrappers still unconsumed — a legitimate resolution always breaks on a
+  # non-wrapper token. Deny rather than let the unresolved tail (e.g. 9
+  # stacked `env`s before `rm`) pass unclassified; an adversarially stacked
+  # command is exactly the case where the cap triggers.
+  for w in $WRAPPER_VERBS; do
+    if [[ "$cverb" == "$w" ]]; then
+      deny "wrapper chain too deep — cannot resolve the canonical command past the depth cap"
+    fi
+  done
 
   # Shell interpreter with -c
   for it in $INTERPRETERS; do

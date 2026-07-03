@@ -16,11 +16,11 @@
 #   Wrapper-verb — env/sudo/env-VAR=val resolve through to the canonical verb;
 #                  git rm / grep rm are not flagged (canonical verb is git/grep,
 #                  not rm); the resolver's depth cap (8, read from the hook's
-#                  `while (( guard < 8 ))`) is locked at the boundary — 8 stacked
-#                  env wrappers still resolve to rm and deny, 9 stacked wrappers
-#                  exceed the cap and the command is allowed. This is a real,
-#                  documented gap (see case_wrap_depth_cap_exceeded below), not
-#                  a suite bug — it is asserted so a future cap change is caught.
+#                  `while (( guard < 8 ))`) is locked at both boundaries — 8
+#                  stacked env wrappers still resolve to rm and deny; 9 (and
+#                  far deeper) stacks exceed the cap and are denied outright
+#                  as "wrapper chain too deep" (fail closed, fixed by #20 —
+#                  previously the unresolved chain was silently allowed).
 #   find         — -delete / -exec rm / -execdir rm denied; a plain find allowed
 #   Safe-path    — default safe list is /tmp only; absolute paths outside it are
 #                  denied; relative paths and .. traversal; shell-metacharacter
@@ -219,20 +219,26 @@ case_wrap_depth_cap_at_limit() {
 }
 
 # Depth-cap boundary, EXCEEDED: 9 stacked `env` before `rm` overruns the
-# resolver's 8-iteration cap. The loop exits with cverb still resolved to
-# "env" (the 9th, unconsumed wrapper token), never reaching "rm", so the
-# destructive-verb check never fires and the command is ALLOWED. This is a
-# real, empirically-confirmed gap in the hook (adversarial wrapper stacking
-# beyond the cap bypasses detection) — locked here as documented/expected
-# behavior, not a suite bug. See the hook's own "Known accepted gaps" comment
-# block; this specific gap is not yet listed there and is worth flagging back
-# to the hook's maintainers.
+# resolver's 8-iteration cap, leaving cverb pointing at an unconsumed wrapper
+# token. Fixed by #20: the hook now fails closed — an unresolved wrapper
+# chain is denied as "wrapper chain too deep" instead of silently allowing
+# the unreached `rm`.
 case_wrap_depth_cap_exceeded() {
   local home cmd
   home="$(new_home)"
   cmd="$(repeat_env 9)rm /etc/passwd"
   run_hook "$home" "$(json_bash "$cmd")"
-  expect_allow "wrap-depth-cap-exceeded"
+  expect_deny "wrap-depth-cap-exceeded" "wrapper chain too deep"
+}
+
+# Deep stack well past the boundary: proves the fail-closed deny is the cap
+# behavior itself, not an off-by-one artifact specific to exactly 9 wrappers.
+case_wrap_depth_cap_deep_stack() {
+  local home cmd
+  home="$(new_home)"
+  cmd="$(repeat_env 20)rm /etc/passwd"
+  run_hook "$home" "$(json_bash "$cmd")"
+  expect_deny "wrap-depth-cap-deep-stack" "wrapper chain too deep"
 }
 
 # ================================== find ====================================
@@ -397,6 +403,7 @@ case_git_rm_allowed
 case_grep_rm_allowed
 case_wrap_depth_cap_at_limit
 case_wrap_depth_cap_exceeded
+case_wrap_depth_cap_deep_stack
 case_find_delete
 case_find_exec_rm
 case_find_execdir_rm
