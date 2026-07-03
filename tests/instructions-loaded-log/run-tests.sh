@@ -45,6 +45,12 @@ done
 [ -f "$HOOK" ] || { err "env" "hook not found at $HOOK"; exit 2; }
 BASH_BIN="$(command -v bash)"
 
+# Feed the hook via file redirection (not a pipe): the SKIP path exits before
+# reading stdin, and `printf | hook` under `set -o pipefail` would then race the
+# hook's pipe close and return EPIPE (non-deterministic across bash versions;
+# bash 3.2 loses it). A redirected file has no such race.
+INFILE="$(mktemp)"; TMPFILES+=("$INFILE")
+
 build_path_without_jq() {
   local dir c src
   dir="$(mktemp -d)"; TMPFILES+=("$dir")
@@ -69,8 +75,9 @@ LOGFILE() { printf '%s/logs/instructions-loaded.jsonl' "$CFG"; }
 RC=0
 run_hook() {
   local payload="$1" use_path="${2:-$PATH}"
+  printf '%s' "$payload" > "$INFILE"
   RC=0
-  printf '%s' "$payload" | CLAUDE_CONFIG_DIR="$CFG" PATH="$use_path" "$BASH_BIN" "$HOOK" >/dev/null 2>&1 || RC=$?
+  CLAUDE_CONFIG_DIR="$CFG" PATH="$use_path" "$BASH_BIN" "$HOOK" < "$INFILE" >/dev/null 2>&1 || RC=$?
 }
 
 # --- Case 1: session_start load -> logged with correct fields ------------------
@@ -173,8 +180,9 @@ case_bytes_size() {
 case_skip() {
   new_cfg
   local f; f="$(mktemp)"; TMPFILES+=("$f"); printf 'x' > "$f"
+  printf '%s' "$(mk_input "$f" session_start Project)" > "$INFILE"
   RC=0
-  printf '%s' "$(mk_input "$f" session_start Project)" | SKIP_INSTRUCTIONS_LOG=1 CLAUDE_CONFIG_DIR="$CFG" "$BASH_BIN" "$HOOK" >/dev/null 2>&1 || RC=$?
+  SKIP_INSTRUCTIONS_LOG=1 CLAUDE_CONFIG_DIR="$CFG" "$BASH_BIN" "$HOOK" < "$INFILE" >/dev/null 2>&1 || RC=$?
   if [ "$RC" = 0 ] && [ ! -e "$CFG/logs" ]; then ok "skip" "exit 0, no write"; else err "skip" "rc=$RC"; errors=$((errors+1)); fi
 }
 
