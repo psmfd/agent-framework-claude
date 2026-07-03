@@ -4,7 +4,7 @@ description: 'Enforce multi-agent research with minimum three agents, quorum-bas
 
 # Research Parallelism
 
-**Enforcement:** SubagentStop hook subagent-verdict-guard.sh (verdict-line presence on framework custom agents — ADR-088); self-report only for `Agent` invocation counts and fan-out composition (#44 tracks the PostToolBatch phase 2)
+**Enforcement:** SubagentStop hook subagent-verdict-guard.sh (verdict-line presence on framework custom agents — ADR-088); PostToolBatch hook fanout-nudge.sh (advisory nudge on a batch-local `Agent`-call count / distinct-`subagent_type` signal — ADR-090); self-report only for task-classification accuracy, exemption validity, substantive divergence of angles, and any fan-out spread across separate batches or turns (#44)
 
 This rule is mandatory, not advisory. When the orchestrator protocol classifies a task as Research, this rule applies in full. There are no soft opt-outs. See the Fan-Out Shapes and Aggregation Policy table in [orchestrator-protocol.md](orchestrator-protocol.md) for how this shape's aggregation compares to replication and multi-reviewer commands.
 

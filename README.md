@@ -104,6 +104,7 @@ agent-framework-claude/
 ├── tests/                 # Test suites for project tooling (each suite: run-tests.sh, exit 0 PASS / 1 FAIL)
 │   ├── fixtures/bin/gh    # Deterministic gh shim shared by the identity-guard suites (ADR-083)
 │   ├── bash-destructive-guard/    # hooks/bash-destructive-guard.sh — compound/wrapper/find/safe-path cases
+│   ├── fanout-nudge/              # hooks/fanout-nudge.sh — PostToolBatch advisory contract (ADR-090)
 │   ├── gh-identity-guard/         # hooks/gh-identity-guard.sh — pre-push identity ladder (ADR-054)
 │   ├── rulesets/          # scripts/rulesets.sh — normalization + apply-rail fixtures (ADR-086)
 │   ├── secrets-guard/     # hooks/secrets-guard.sh — staged-blob bypass tests (ADR-059)
@@ -143,6 +144,7 @@ agent-framework-claude/
 │   └── review.md          # /review — 3-way parallel review (code + security + linter)
 ├── hooks/                 # Shell scripts for Claude Code and git hooks
 │   ├── bash-destructive-guard.sh
+│   ├── fanout-nudge.sh
 │   ├── gh-identity-guard.sh
 │   ├── secrets-guard.sh
 │   ├── session-gh-identity-guard.sh
@@ -295,6 +297,7 @@ Hooks are shell scripts that run in response to Claude Code session events, prov
 | `gh-identity-guard.sh` | git `pre-push` | Blocks pushes from the wrong GitHub account (raw terminal/IDE vector) |
 | `stop-preflight-check.sh` | `Stop` | Runs a description prompt before the session ends |
 | `subagent-verdict-guard.sh` | `SubagentStop` | Blocks a framework custom agent returning without its verdict line (ADR-088) |
+| `fanout-nudge.sh` | `PostToolBatch` | Advisory-only nudge toward the 3+ divergence minimum; never blocks (ADR-090) |
 | `worktree-create.sh` | `PostToolUse` | Enforces symlink containment on worktree creation (ADR-070) |
 | `worktree-remove.sh` | `PostToolUse` | Cleans up worktrees after removal |
 
