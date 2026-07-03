@@ -118,6 +118,14 @@ aws_fake() { printf 'AKIA%s' "$(printf 'A%.0s' {1..16})"; }
 # interpolated via %s.
 pkcs8_fake() { printf -- '-----BEGIN %s PRIVATE KEY-----\nMIICfiller0000\n-----END %s PRIVATE KEY-----\n' "ENCRYPTED" "ENCRYPTED"; }
 
+# Fake signed JWT assembled at runtime (the eyJ prefixes are interpolated via
+# %s so no JWT-shaped literal appears in this source — which also keeps CI
+# gitleaks' own JWT rule off the suite). ADR-095.
+jwt_fake() { printf '%sJhbGciOiJIUzI1NiJ9.%sJzdWIiOiIxMjM0In0.c2lnbmF0dXJlc2ln' "ey" "ey"; }
+
+# Fake bearer header (header name interpolated via %s for the same reason). ADR-095.
+bearer_fake() { printf '%s: Bearer abcdef1234567890ABCDEF12345' "Authorization"; }
+
 # --- JSON fixture builders (jq -n handles escaping; no manual quoting) ---
 
 json_bash()            { jq -nc --arg cmd "$1" '{tool_name:"Bash", tool_input:{command:$cmd}}'; }
@@ -169,7 +177,36 @@ case_bash_secret_beyond_cap() {
   expect_allow "bash-beyond-cap" "$rc"
 }
 
+case_bash_jwt() {
+  local d json rc
+  d="$(new_plain_dir)"
+  json="$(json_bash "curl -H '$(jwt_fake)' http://127.0.0.1:8080/x")"
+  rc="$(run_hook "$d" "$json")"
+  expect_deny "bash-jwt" "$rc"
+}
+
+# Placeholder-shaped bearer construction must NOT deny (false-positive control):
+# the command builds the header from a variable, so no 20+ token-char literal
+# follows "Bearer" in the command string (ADR-095).
+case_bash_bearer_placeholder() {
+  local d json rc
+  d="$(new_plain_dir)"
+  # shellcheck disable=SC2016  # single quotes intentional — literal $TOKEN placeholder for the false-positive control
+  json="$(json_bash 'printf "%s: Bearer %s" Authorization "$TOKEN"')"
+  rc="$(run_hook "$d" "$json")"
+  expect_allow "bash-bearer-placeholder" "$rc"
+}
+
 # ============================== Write branch ================================
+
+case_write_bearer() {
+  local d json rc
+  d="$(new_plain_dir)"
+  json="$(json_write "$d/notes.md" "auth header: $(bearer_fake)")"
+  rc="$(run_hook "$d" "$json")"
+  expect_deny "write-bearer" "$rc"
+}
+
 
 case_write_id_rsa() {
   local d json rc
@@ -341,6 +378,9 @@ case_bash_aws_key
 case_bash_sensitive_path
 case_bash_clean
 case_bash_secret_beyond_cap
+case_bash_jwt
+case_bash_bearer_placeholder
+case_write_bearer
 case_write_id_rsa
 case_write_vault_no_header
 case_write_vault_with_header
