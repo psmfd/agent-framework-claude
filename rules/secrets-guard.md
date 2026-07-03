@@ -6,7 +6,7 @@ description: 'Mandate a pre-commit guard against unencrypted Ansible vault files
 
 **Enforcement:** pre-commit hook secrets-guard.sh; PreToolUse hook session-secrets-guard.sh; CI secrets-scan.yml
 
-Secrets are guarded in two layers that share one pattern set and one set of overrides. **Layer 1 (pre-commit):** `setup.sh` installs `hooks/secrets-guard.sh` as the framework repo's `pre-commit` hook, blocking commits containing unencrypted Ansible vault files, PEM private keys, AWS access key IDs, GitHub personal access tokens, and SSH private key file paths. **Layer 2 (in-session):** `hooks/session-secrets-guard.sh` is a `PreToolUse` hook that denies the same material the moment an agent tries to surface it — before it ever reaches disk. Pre-commit prevention is significantly cheaper than post-push detection (once a secret reaches a remote, rotation is the only remediation); in-session prevention is cheaper still, since it stops a secret from being written or echoed at all.
+Secrets are guarded in two layers that share one pattern set and one set of overrides. **Layer 1 (pre-commit):** `setup.sh` installs `hooks/secrets-guard.sh` as the framework repo's `pre-commit` hook, blocking commits containing unencrypted Ansible vault files, PEM private keys, AWS access key IDs, GitHub personal access tokens, signed JWTs, `Authorization: Bearer` token literals, and SSH private key file paths. **Layer 2 (in-session):** `hooks/session-secrets-guard.sh` is a `PreToolUse` hook that denies the same material the moment an agent tries to surface it — before it ever reaches disk. Pre-commit prevention is significantly cheaper than post-push detection (once a secret reaches a remote, rotation is the only remediation); in-session prevention is cheaper still, since it stops a secret from being written or echoed at all.
 
 ## What the hook blocks
 
@@ -16,6 +16,8 @@ The hook iterates `git diff --cached --name-only --diff-filter=ACMR` (renames in
 * **PEM private-key headers** — `-----BEGIN (RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY` (optional-group form; BSD grep rejects the empty-alternation variant — see ADR-053 and #201). The `ENCRYPTED ` alternative covers PKCS#8 encrypted keys (the `ENCRYPTED PRIVATE KEY` header form, RFC 5958) emitted by `openssl pkcs8 -topk8` and modern tooling.
 * **AWS access key IDs** — `AKIA|ASIA|ABIA|ACCA` followed by 16 uppercase alphanumerics
 * **GitHub tokens** — `gh[oprsu]_[A-Za-z0-9]{36,}` (covers all five documented prefixes: `ghp_` classic PAT, `gho_` OAuth, `ghu_` user-to-server, `ghs_` server-to-server / Actions `GITHUB_TOKEN`, `ghr_` refresh) and `github_pat_[A-Za-z0-9_]{82,}` (fine-grained PAT). The body bound is open-ended because GitHub treats tokens as opaque and is rolling out a longer `ghs_` format (~520 chars) — a fixed length would silently miss new tokens (#211, ADR-057)
+* **Signed JWTs** — three dot-separated base64url segments where the header and payload both start `eyJ` (base64url `{"`), each 10+ characters with a 10+ character signature. Unsigned/`alg:none` tokens are deliberately out of scope — a two-segment match would flag ordinary base64 blobs (#64, ADR-095)
+* **Bearer-token literals** — `Authorization: Bearer` (header name and scheme matched case-insensitively per RFC 7230 §3.2, so `authorization: bearer …` is caught too) followed by 20+ contiguous token characters. Format placeholders (`%s`, `<key>`, `$VAR`) never reach the length bound, so code that builds the header from a variable — e.g. the `/expertise` helper script — does not match; a pasted opaque key does (#64, ADR-095)
 * **Sensitive file paths** — file basenames `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519` (plus explicit `.pem` variants) and `id_ecdsa_sk`, `id_ed25519_sk` (FIDO2 hardware-backed keys, OpenSSH 8.2+; their `.pem` forms are caught by the `*.pem` glob below); also any `*.pem` or `*.key` file
 
 The hook does NOT detect inline `!vault |` scalars in partially-encrypted YAML files — that gap requires semantic YAML parsing and is out of scope for this hook.
@@ -24,7 +26,7 @@ The hook does NOT detect inline `!vault |` scalars in partially-encrypted YAML f
 
 `hooks/session-secrets-guard.sh` fires as a `PreToolUse` hook wired via `settings.json` (matcher `^(Bash|Write|Edit|MultiEdit|NotebookEdit)$`). It denies, before execution:
 
-* **Bash / execute** — an inline secret literal in the command (same pattern set as layer 1), or a read of a sensitive credential file (`~/.aws/credentials`, `~/.aws/config`, `~/.ssh/id_*`, `~/.kube/config`, `~/.netrc`, `~/.pgpass`, `~/.docker/config.json`).
+* **Bash / execute** — an inline secret literal in the command (same pattern set as layer 1), or a read of a sensitive credential file (`~/.aws/credentials`, `~/.aws/config`, `~/.ssh/id_*`, `~/.kube/config`, `~/.netrc`, `~/.pgpass`, `~/.docker/config.json`, `~/.config/expertise-search/config`).
 * **Write / create_file** — a write to a sensitive path (`id_rsa`, `*.pem`, `*.key`), a vault-named file whose content lacks the `$ANSIBLE_VAULT` header, or content matching a secret pattern.
 * **Edit / MultiEdit / NotebookEdit** — NEW content (`new_string` / `new_source`) matching a secret pattern. Replaced/old text is never scanned, so an edit that REMOVES a secret is never blocked.
 
@@ -65,6 +67,7 @@ The allowlist file accepts one path glob per line. Lines starting with `#` and b
 * ADR-059 — staged-blob scanning (supersedes ADR-047); `tests/secrets-guard/run-tests.sh` is its regression suite
 * ADR-047 — original design record for the pre-commit hook (superseded by ADR-059)
 * ADR-053 — design record for the in-session `PreToolUse` layer
+* ADR-095 — JWT and Authorization-Bearer pattern additions (#64)
 * `rules/script-output-conventions.md` — output format the hooks follow
 * `hooks/secrets-guard.sh` — the pre-commit (layer 1) implementation
 * `hooks/session-secrets-guard.sh` — the in-session (layer 2) implementation

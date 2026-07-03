@@ -9,6 +9,10 @@
 #   3. vault file staged without a header, working tree given a valid header
 #   4. file renamed into a vault name with an unencrypted body (ACMR filter)
 #   5. PKCS#8 encrypted private-key header (the ENCRYPTED PRIVATE KEY alternative)
+#   6. signed JWT (ADR-095)
+#   7. Authorization: Bearer literal (ADR-095)
+#   8. lowercase authorization/bearer casing still blocks (RFC 7230 case-insensitivity)
+#   9. bearer format placeholders pass (false-positive control)
 # Plus a positive control: a clean staged file must pass (no false positive).
 #
 # Each case builds a throwaway git repo and runs the hook against the staged
@@ -66,6 +70,15 @@ aws_fake() { printf 'AKIA%s' "$(printf 'A%.0s' {1..16})"; }
 # not contiguous in this source — the word is interpolated via %s).
 pkcs8_fake() { printf -- '-----BEGIN %s PRIVATE KEY-----\nMIICfiller0000\n-----END %s PRIVATE KEY-----\n' "ENCRYPTED" "ENCRYPTED"; }
 
+# Fake signed JWT assembled at runtime (three base64url segments; the eyJ
+# prefixes are interpolated via %s so no JWT-shaped literal appears in this
+# source — which also keeps CI gitleaks' own JWT rule off the suite). ADR-095.
+jwt_fake() { printf '%sJhbGciOiJIUzI1NiJ9.%sJzdWIiOiIxMjM0In0.c2lnbmF0dXJlc2ln\n' "ey" "ey"; }
+
+# Fake bearer header (header name interpolated via %s for the same
+# no-contiguous-literal reason). ADR-095.
+bearer_fake() { printf '%s: Bearer abcdef1234567890ABCDEF12345\n' "Authorization"; }
+
 expect_block() {
   local name="$1" rc="$2"
   if [ "$rc" = "1" ]; then ok "$name" "blocked (exit 1) as expected"
@@ -119,6 +132,41 @@ case_pkcs8_encrypted() {
   expect_block "pkcs8-encrypted" "$(run_hook "$d")"
 }
 
+# Case 7 — staged signed JWT (ADR-095).
+case_jwt_blocked() {
+  local d; d="$(new_repo)"
+  jwt_fake > "$d/token.txt"
+  git -C "$d" add token.txt
+  expect_block "jwt-blocked" "$(run_hook "$d")"
+}
+
+# Case 8 — staged Authorization: Bearer literal (ADR-095).
+case_bearer_blocked() {
+  local d; d="$(new_repo)"
+  bearer_fake > "$d/snippet.txt"
+  git -C "$d" add snippet.txt
+  expect_block "bearer-blocked" "$(run_hook "$d")"
+}
+
+# Case 8b — lowercase header/scheme casing must still match (RFC 7230 header
+# names are case-insensitive; detector made case-tolerant in the pre-v0.4.0 review).
+case_bearer_lowercase_blocked() {
+  local d; d="$(new_repo)"
+  printf '%s: bearer abcdef1234567890ABCDEF12345\n' "authorization" > "$d/lower.txt"
+  git -C "$d" add lower.txt
+  expect_block "bearer-lowercase-blocked" "$(run_hook "$d")"
+}
+
+# Case 9 — bearer format placeholders must NOT match (false-positive control).
+case_bearer_placeholder_passes() {
+  local d rc; d="$(new_repo)"
+  printf '%s: Bearer %%s\n%s: Bearer <your-key>\n' "Authorization" "Authorization" > "$d/doc.md"
+  git -C "$d" add doc.md
+  rc="$(run_hook "$d")"
+  if [ "$rc" = "0" ]; then ok "bearer-placeholder-pass" "placeholders pass (exit 0)"
+  else err "bearer-placeholder-pass" "expected pass (exit 0), got exit $rc"; errors=$((errors+1)); fi
+}
+
 # Positive control — a clean staged file must pass (no false positive).
 case_clean_passes() {
   local d rc; d="$(new_repo)"
@@ -135,6 +183,10 @@ case_staged_deleted
 case_vault_header
 case_rename_vault
 case_pkcs8_encrypted
+case_jwt_blocked
+case_bearer_blocked
+case_bearer_lowercase_blocked
+case_bearer_placeholder_passes
 case_clean_passes
 
 echo "=================================="

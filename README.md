@@ -13,6 +13,7 @@ Personal AI coding assistant configuration — agents, rules, and settings — m
 - [Current Agents](#current-agents)
 - [Current Rules](#current-rules)
 - [Current Commands](#current-commands)
+- [Current Skills](#current-skills)
 - [Installation](#installation)
 - [Adding New Rules](#adding-new-rules)
 - [Adding New Agents](#adding-new-agents)
@@ -104,6 +105,7 @@ agent-framework-claude/
 ├── tests/                 # Test suites for project tooling (each suite: run-tests.sh, exit 0 PASS / 1 FAIL)
 │   ├── fixtures/bin/gh    # Deterministic gh shim shared by the identity-guard suites (ADR-083)
 │   ├── bash-destructive-guard/    # hooks/bash-destructive-guard.sh — compound/wrapper/find/safe-path cases
+│   ├── expertise-search/          # skills/expertise/scripts/expertise-search.sh — helper contract (ADR-094)
 │   ├── fanout-nudge/              # hooks/fanout-nudge.sh — PostToolBatch advisory contract (ADR-090)
 │   ├── gh-identity-guard/         # hooks/gh-identity-guard.sh — pre-push identity ladder (ADR-054)
 │   ├── instructions-loaded-log/  # hooks/instructions-loaded-log.sh — InstructionsLoaded logger (ADR-092)
@@ -144,6 +146,10 @@ agent-framework-claude/
 │   └── wsl2-expert.md
 ├── commands/              # Claude Code slash commands (symlinked to ~/.claude/commands/)
 │   └── review.md          # /review — 3-way parallel review (code + security + linter)
+├── skills/                # Claude Code skills with bundled files (symlinked to ~/.claude/skills/)
+│   └── expertise/         # /expertise — read-only agent-expertise-api search (ADR-094)
+│       ├── SKILL.md               # Skill body — steps + constraints
+│       └── scripts/expertise-search.sh  # Bundled helper — token-safe curl wrapper
 ├── hooks/                 # Shell scripts for Claude Code and git hooks
 │   ├── bash-destructive-guard.sh
 │   ├── fanout-nudge.sh
@@ -499,7 +505,7 @@ Two fail-closed layers block pushing or mutating GitHub from the wrong account o
 
 ### No MCP Servers (`rules/no-mcp-servers.md`)
 
-This repo prohibits MCP server usage in all content it produces or distributes. No `mcp-servers` in frontmatter, no `.claude/settings.json` in committed content, no MCP server package references. All tool access is controlled through explicit `tools` allowlists. This policy exists because runtime-loaded MCP servers are a supply-chain attack surface the `tools` allowlist cannot constrain (OWASP ASI04; OWASP MCP04:2025); the two known Claude Code CVEs are related but not MCP-driven (CVE-2025-59536 pre-trust code execution, CVE-2026-21852 `ANTHROPIC_BASE_URL` key exfiltration).
+This repo prohibits MCP server usage in all content it produces or distributes. No `mcp-servers` in frontmatter, no plugin-bundled `.mcp.json` manifests, no `.claude/settings.json` in committed content, no MCP server package references. All tool access is controlled through explicit `tools` allowlists. This policy exists because runtime-loaded MCP servers are a supply-chain attack surface the `tools` allowlist cannot constrain (OWASP ASI04; OWASP MCP04:2025); the two known Claude Code CVEs are related but not MCP-driven (CVE-2025-59536 pre-trust code execution, CVE-2026-21852 `ANTHROPIC_BASE_URL` key exfiltration).
 
 ### Orchestrator Protocol (`rules/orchestrator-protocol.md`)
 
@@ -527,7 +533,7 @@ All shell scripts use standardized output labels (`OK`, `SKIP`, `WARN`, `INFO`, 
 
 ### Secrets Guard (`rules/secrets-guard.md`)
 
-Two layers share one pattern set. **Layer 1 (pre-commit):** `setup.sh` installs `hooks/secrets-guard.sh` as the framework repo's `pre-commit` hook, blocking commits containing unencrypted Ansible vault files, PEM private keys, AWS access key IDs, GitHub tokens (all five `gh*_` prefixes, incl. the `ghs_` Actions `GITHUB_TOKEN`), and SSH private-key file paths (incl. FIDO2 `_sk` keys) (see ADR-059, which supersedes ADR-047). **Layer 2 (in-session):** `hooks/session-secrets-guard.sh` is a `PreToolUse` hook that denies the same secrets at the moment an agent tries to write or surface them via `Bash`/`Write`/`Edit`/`MultiEdit`/`NotebookEdit` — before they reach disk; it fails closed (denies) when `jq` is absent rather than silently disabling (see ADR-053, ADR-057). Override either via `SKIP_SECRETS_GUARD=1`, `.secrets-guard-allowlist` at the repo root, or (commit only) `--no-verify`.
+Two layers share one pattern set. **Layer 1 (pre-commit):** `setup.sh` installs `hooks/secrets-guard.sh` as the framework repo's `pre-commit` hook, blocking commits containing unencrypted Ansible vault files, PEM private keys, AWS access key IDs, GitHub tokens (all five `gh*_` prefixes, incl. the `ghs_` Actions `GITHUB_TOKEN`), signed JWTs and `Authorization: Bearer` token literals (ADR-095), and SSH private-key file paths (incl. FIDO2 `_sk` keys) (see ADR-059, which supersedes ADR-047). **Layer 2 (in-session):** `hooks/session-secrets-guard.sh` is a `PreToolUse` hook that denies the same secrets at the moment an agent tries to write or surface them via `Bash`/`Write`/`Edit`/`MultiEdit`/`NotebookEdit` — before they reach disk; it fails closed (denies) when `jq` is absent rather than silently disabling (see ADR-053, ADR-057). Override either via `SKIP_SECRETS_GUARD=1`, `.secrets-guard-allowlist` at the repo root, or (commit only) `--no-verify`.
 
 ### SemVer Tagging (`rules/semver-tagging.md`)
 
@@ -545,6 +551,14 @@ Claude Code slash commands live in `commands/` and are symlinked to `~/.claude/c
 
 Three-way parallel review — `code-review-expert` + `security-review-expert` + `linter` — synthesized into one merged findings table with a `Source` column. The standard divergence fan-out for routine changes.
 
+## Current Skills
+
+Skills live in `skills/` (one directory per skill: `SKILL.md` plus bundled files) and are symlinked to `~/.claude/skills/` by `setup.sh`. Unlike single-file commands, a skill can carry helper scripts resolved via `${CLAUDE_SKILL_DIR}`.
+
+### /expertise (`skills/expertise/`)
+
+Read-only semantic search of the local agent-expertise-api via a bundled token-safe helper script — an explicit, visible Bash tool call whose response enters context as untrusted tool output, per the carve-out in `rules/no-mcp-servers.md`. Read-only phase 1; design record ADR-094.
+
 ## Installation
 
 ### Automated (recommended)
@@ -561,7 +575,7 @@ The setup script:
 
 - Creates `~/.claude/` if it doesn't exist
 - Backs up any existing items with a timestamped `.bak` suffix
-- Creates symlinks: `rules/`, `agents/`, `commands/`, `hooks/`, `settings.json` → `~/.claude/`
+- Creates symlinks: `rules/`, `agents/`, `commands/`, `skills/`, `hooks/`, `settings.json` → `~/.claude/`
 - Creates `~/.claude/bash-guard-safe-paths.conf` with default safe paths for the destructive command guard
 - Installs a pre-push git hook that runs `validate.sh` before every push
 - Offers to install the **Claude Code CLI** via Anthropic's native installer (download-then-execute from a pinned domain, consent required, `CLAUDE_CLI_INSTALL=1` to auto-install under `--non-interactive`) when `claude` is absent — see [ADR-093](adrs/093-install-claude-cli-native.md)

@@ -64,6 +64,11 @@ TMPDIRS=()
 cleanup() { local d; for d in ${TMPDIRS[@]+"${TMPDIRS[@]}"}; do [ -n "$d" ] && rm -rf "$d"; done; }
 trap cleanup EXIT
 
+# Stdin payload file, reused across the (sequential) run_hook calls — see the
+# EPIPE rationale on run_hook below (#68).
+INFILE="$(mktemp)"
+TMPDIRS+=("$INFILE")
+
 for cmd in git jq bash; do
   command -v "$cmd" >/dev/null 2>&1 || { err "env" "$cmd is required but not on PATH"; exit 2; }
 done
@@ -143,7 +148,13 @@ OUT="" RC=0
 run_hook() {
   local d="$1" payload="$2"
   RC=0
-  OUT="$( cd "$d" && printf '%s' "$payload" | PATH="$CASE_PATH" "$BASH_BIN" "$HOOK" 2>&1 )" || RC=$?
+  # Feed stdin via file redirection, never `printf | hook`: on skip/allow paths
+  # the hook exits before `INPUT="$(cat)"`, and under pipefail the printf side
+  # can lose the pipe-close race (EPIPE) and poison the pipeline result — the
+  # bash-3.2 CI failure diagnosed in PR #59 and swept in #60 (this sibling was
+  # missed; completed per #68).
+  printf '%s' "$payload" > "$INFILE"
+  OUT="$( cd "$d" && PATH="$CASE_PATH" "$BASH_BIN" "$HOOK" < "$INFILE" 2>&1 )" || RC=$?
 }
 
 # Assert RC == expected and (if non-empty) OUT contains substr.

@@ -97,13 +97,17 @@ esac
 # GITHUB_TOKEN), ghr_ (refresh). The body bound is OPEN ({36,}, {82,}) because
 # GitHub treats tokens as opaque and is rolling out a longer ghs_ format
 # (~520 chars) — a fixed length would silently miss new tokens (#211, ADR-057).
+# JWT: signed tokens only (header.payload.signature, both segments base64url
+# starting eyJ = '{"'); unsigned/alg:none tokens are out of scope (#64,
+# ADR-095). Bearer: a high-entropy literal after "Authorization: Bearer " —
+# placeholders (%s, <key>, $VAR) don't match the 20+ token-char requirement.
 # shellcheck disable=SC2016  # single quotes intentional — regex literal, not expansion
-SECRET_PATTERNS='-----BEGIN (RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY|(^|[^A-Z0-9])(AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}([^A-Z0-9]|$)|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{82,}'
+SECRET_PATTERNS='-----BEGIN (RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY|(^|[^A-Z0-9])(AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}([^A-Z0-9]|$)|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{82,}|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|[Aa]uthorization: [Bb]earer [A-Za-z0-9._~+/=-]{20,}'
 
 # Sensitive credential-file reads in bash commands. POSIX ERE (grep -E): \s ->
 # [[:space:]]; forward slashes are not special; $ and { are literal here.
 # shellcheck disable=SC2016
-BASH_SENSITIVE_PATH_RE='(^|[^a-zA-Z0-9_/])(\$HOME|~|\$\{HOME\})?/?(\.?)(aws/credentials|aws/config|ssh/id_(rsa|dsa|ecdsa|ed25519|ecdsa_sk|ed25519_sk)(\.pub)?|kube/config|netrc|pgpass|docker/config\.json)([[:space:]]|$|;|\||&)'
+BASH_SENSITIVE_PATH_RE='(^|[^a-zA-Z0-9_/])(\$HOME|~|\$\{HOME\})?/?(\.?)(aws/credentials|aws/config|ssh/id_(rsa|dsa|ecdsa|ed25519|ecdsa_sk|ed25519_sk)(\.pub)?|kube/config|netrc|pgpass|docker/config\.json|config/expertise-search/config)([[:space:]]|$|;|\||&)'
 
 # shellcheck disable=SC2016
 VAULT_HEADER_RE='^\$ANSIBLE_VAULT;[0-9]+\.[0-9]+;[A-Z0-9]+'

@@ -10,10 +10,14 @@
 # plain throwaway directory; only the allowlist case needs a git repo.
 #
 # Coverage:
-#   Bash branch    — inline secret literal, sensitive credential-file read,
+#   Bash branch    — inline secret literal, sensitive credential-file read
+#                     (incl. ~/.config/expertise-search/config, ADR-094),
+#                     JWT + Authorization:Bearer literals incl. lowercase
+#                     casing (ADR-095), bearer placeholder passes,
 #                     clean command passes, secret beyond the 512 KB scan cap
 #                     is NOT caught (documented accepted gap, ADR-053)
 #   Write branch   — sensitive path (id_rsa) blocked regardless of content,
+#                     Authorization:Bearer content blocked (ADR-095),
 #                     vault-named file without/with the $ANSIBLE_VAULT header,
 #                     PKCS#8 ENCRYPTED PRIVATE KEY content, missing file_path
 #                     fails CLOSED, .secrets-guard-allowlist and skip-pattern
@@ -80,10 +84,20 @@ new_repo() {
   printf '%s' "$d"
 }
 
+# Stdin payload file, reused across the (sequential) runner calls. Feed the
+# hook via file redirection, never `printf | hook`: on the SKIP_SECRETS_GUARD
+# path the hook exits before `INPUT="$(cat)"`, so under pipefail the printf
+# side can lose the pipe-close race (EPIPE) and poison the pipeline result —
+# the bash-3.2 CI failure diagnosed in PR #59 and swept in #60 (this sibling
+# suite was missed; hardened per the pre-v0.4.0 review).
+INFILE="$(mktemp)"
+TMPDIRS+=("$INFILE")
+
 # Run the hook in dir $1 with stdin JSON $2. Prints the exit code.
 run_hook() {
   local d="$1" json="$2" rc=0
-  ( cd "$d" && printf '%s' "$json" | bash "$HOOK" >/dev/null 2>&1 ) || rc=$?
+  printf '%s' "$json" > "$INFILE"
+  ( cd "$d" && bash "$HOOK" < "$INFILE" >/dev/null 2>&1 ) || rc=$?
   printf '%s' "$rc"
 }
 
@@ -91,7 +105,8 @@ run_hook() {
 # (e.g. "SKIP_SECRETS_GUARD=1"). Prints the exit code.
 run_hook_env() {
   local d="$1" json="$2" envset="$3" rc=0
-  ( cd "$d" && printf '%s' "$json" | env "$envset" bash "$HOOK" >/dev/null 2>&1 ) || rc=$?
+  printf '%s' "$json" > "$INFILE"
+  ( cd "$d" && env "$envset" bash "$HOOK" < "$INFILE" >/dev/null 2>&1 ) || rc=$?
   printf '%s' "$rc"
 }
 
@@ -117,6 +132,14 @@ aws_fake() { printf 'AKIA%s' "$(printf 'A%.0s' {1..16})"; }
 # PRIVATE KEY` literal is not contiguous in this source; the word is
 # interpolated via %s.
 pkcs8_fake() { printf -- '-----BEGIN %s PRIVATE KEY-----\nMIICfiller0000\n-----END %s PRIVATE KEY-----\n' "ENCRYPTED" "ENCRYPTED"; }
+
+# Fake signed JWT assembled at runtime (the eyJ prefixes are interpolated via
+# %s so no JWT-shaped literal appears in this source — which also keeps CI
+# gitleaks' own JWT rule off the suite). ADR-095.
+jwt_fake() { printf '%sJhbGciOiJIUzI1NiJ9.%sJzdWIiOiIxMjM0In0.c2lnbmF0dXJlc2ln' "ey" "ey"; }
+
+# Fake bearer header (header name interpolated via %s for the same reason). ADR-095.
+bearer_fake() { printf '%s: Bearer abcdef1234567890ABCDEF12345' "Authorization"; }
 
 # --- JSON fixture builders (jq -n handles escaping; no manual quoting) ---
 
@@ -156,6 +179,27 @@ case_bash_clean() {
   expect_allow "bash-clean" "$rc"
 }
 
+# The /expertise credential file is a sensitive path (ADR-094); reading it in a
+# Bash command must be denied like the other credential-file classes.
+case_bash_expertise_config() {
+  local d json rc
+  d="$(new_plain_dir)"
+  json="$(json_bash 'cat ~/.config/expertise-search/config')"
+  rc="$(run_hook "$d" "$json")"
+  expect_deny "bash-expertise-config" "$rc"
+}
+
+# Lowercase header/scheme casing must still match (RFC 7230 header names are
+# case-insensitive; the Bearer detector was made case-tolerant in the
+# pre-v0.4.0 review).
+case_bash_bearer_lowercase() {
+  local d json rc
+  d="$(new_plain_dir)"
+  json="$(json_bash 'echo "authorization: bearer abcdef1234567890ABCDEF12345"')"
+  rc="$(run_hook "$d" "$json")"
+  expect_deny "bash-bearer-lowercase" "$rc"
+}
+
 # Documented accepted gap (ADR-053): contains_secret scans only the first
 # 512 KB. A secret positioned after that boundary is NOT caught. This case
 # locks the gap as known/expected rather than an unnoticed regression.
@@ -169,7 +213,35 @@ case_bash_secret_beyond_cap() {
   expect_allow "bash-beyond-cap" "$rc"
 }
 
+case_bash_jwt() {
+  local d json rc
+  d="$(new_plain_dir)"
+  json="$(json_bash "curl -H '$(jwt_fake)' http://127.0.0.1:8080/x")"
+  rc="$(run_hook "$d" "$json")"
+  expect_deny "bash-jwt" "$rc"
+}
+
+# Placeholder-shaped bearer construction must NOT deny (false-positive control):
+# the command builds the header from a variable, so no 20+ token-char literal
+# follows "Bearer" in the command string (ADR-095).
+case_bash_bearer_placeholder() {
+  local d json rc
+  d="$(new_plain_dir)"
+  # shellcheck disable=SC2016  # single quotes intentional — literal $TOKEN placeholder for the false-positive control
+  json="$(json_bash 'printf "%s: Bearer %s" Authorization "$TOKEN"')"
+  rc="$(run_hook "$d" "$json")"
+  expect_allow "bash-bearer-placeholder" "$rc"
+}
+
 # ============================== Write branch ================================
+
+case_write_bearer() {
+  local d json rc
+  d="$(new_plain_dir)"
+  json="$(json_write "$d/notes.md" "auth header: $(bearer_fake)")"
+  rc="$(run_hook "$d" "$json")"
+  expect_deny "write-bearer" "$rc"
+}
 
 case_write_id_rsa() {
   local d json rc
@@ -331,7 +403,8 @@ case_jq_absent() {
   ln -s "$(command -v cat)" "$fakebin/cat"
   json="$(json_write "$d/home/.ssh/id_rsa" "hello")"
   rc=0
-  ( cd "$d" && printf '%s' "$json" | env -i PATH="$fakebin" "$bashbin" "$HOOK" >/dev/null 2>&1 ) || rc=$?
+  printf '%s' "$json" > "$INFILE"
+  ( cd "$d" && env -i PATH="$fakebin" "$bashbin" "$HOOK" < "$INFILE" >/dev/null 2>&1 ) || rc=$?
   expect_deny "jq-absent" "$rc"
 }
 
@@ -340,7 +413,12 @@ info "session-secrets-guard PreToolUse fixture tests"
 case_bash_aws_key
 case_bash_sensitive_path
 case_bash_clean
+case_bash_expertise_config
+case_bash_bearer_lowercase
 case_bash_secret_beyond_cap
+case_bash_jwt
+case_bash_bearer_placeholder
+case_write_bearer
 case_write_id_rsa
 case_write_vault_no_header
 case_write_vault_with_header
