@@ -1,5 +1,7 @@
 ---
 description: 'Write large review artifacts to the tracked .review/ handoff channel; never merge them to the integration branch'
+paths:
+  - ".review/**"
 ---
 
 # Artifact Handoff
