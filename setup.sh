@@ -48,6 +48,7 @@ CLAUDE_LINKS=(
   "settings.json:settings.json"
   "hooks:hooks"
   "commands:commands"
+  "skills:skills"
 )
 
 # --- Help (extracted from the header comment block; works before log.sh) ---

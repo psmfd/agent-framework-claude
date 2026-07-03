@@ -70,7 +70,9 @@ for lib in "$REPO_DIR"/scripts/lib/*.sh; do
 done
 
 # --- 2. Syntax checks (parse-time only; runtime is covered by 3 and 4) --------
-for f in "$REPO_DIR"/setup.sh "$REPO_DIR"/scripts/rulesets.sh "$REPO_DIR"/hooks/*.sh; do
+for f in "$REPO_DIR"/setup.sh "$REPO_DIR"/scripts/rulesets.sh "$REPO_DIR"/hooks/*.sh \
+         "$REPO_DIR"/skills/*/scripts/*.sh; do
+  [ -f "$f" ] || continue   # skills glob may be empty on a partial checkout
   name="${f#"$REPO_DIR"/}"
   if "$BASH32_BIN" -n "$f" 2>/dev/null; then
     ok "syntax" "$name parses under bash 3.2"

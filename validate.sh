@@ -301,7 +301,8 @@ check_no_mcp_prose() {
   local pattern='@modelcontextprotocol/|mcp-server-[a-z0-9]'
   local scanned=0 flagged=0 f rel lineno rest
   for f in "$DOTFILES_DIR"/rules/*.md "$DOTFILES_DIR"/agents/*.md \
-           "$DOTFILES_DIR"/commands/*.md "$DOTFILES_DIR"/web/instructions.md; do
+           "$DOTFILES_DIR"/commands/*.md "$DOTFILES_DIR"/skills/*/SKILL.md \
+           "$DOTFILES_DIR"/web/instructions.md; do
     [[ -f "$f" ]] || continue
     scanned=$((scanned + 1))
     rel="${f#"$DOTFILES_DIR"/}"
@@ -316,6 +317,24 @@ check_no_mcp_prose() {
     skip "mcp-prose" "no distributed prose surfaces found"
   elif [[ $flagged -eq 0 ]]; then
     ok "mcp-prose" "$scanned file(s) free of concrete MCP package references"
+  fi
+}
+
+# --- Check for committed plugin/MCP manifests ---
+# rules/no-mcp-servers.md (as amended per ADR-094) prohibits bundling MCP
+# servers via plugin packaging. A committed `.mcp.json` anywhere, or a
+# `.claude-plugin/` directory, is the concrete artifact of that prohibited
+# shape — ERROR-gated, since a manifest is unambiguous in a way prose is not.
+check_no_mcp_manifests() {
+  local hits=0 f
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    error "mcp-manifests" "${f#"$DOTFILES_DIR"/}: committed MCP/plugin manifest is prohibited (rules/no-mcp-servers.md, ADR-094)"
+    hits=$((hits + 1))
+  done < <(find "$DOTFILES_DIR" \( -name node_modules -o -name .git \) -prune -o \
+             \( -name '.mcp.json' -o -type d -name '.claude-plugin' \) -print 2>/dev/null)
+  if [[ $hits -eq 0 ]]; then
+    ok "mcp-manifests" "no committed .mcp.json or .claude-plugin/ manifests"
   fi
 }
 
@@ -969,9 +988,10 @@ check_shellcheck() {
   local scripts=() f
   while IFS= read -r f; do
     scripts+=("$f")
-  done < <(find "$DOTFILES_DIR/hooks" "$DOTFILES_DIR/scripts/lib" -maxdepth 1 -name '*.sh' -type f 2>/dev/null | sort)
+  done < <(find "$DOTFILES_DIR/hooks" "$DOTFILES_DIR/scripts/lib" \
+             "$DOTFILES_DIR"/skills/*/scripts -maxdepth 1 -name '*.sh' -type f 2>/dev/null | sort)
   if (( ${#scripts[@]} == 0 )); then
-    skip "shellcheck" "no .sh files in hooks/ or scripts/lib/"
+    skip "shellcheck" "no .sh files in hooks/, scripts/lib/, or skills/*/scripts/"
     return
   fi
   # --format=gcc emits exactly one line per finding, so the loop below counts
@@ -980,7 +1000,7 @@ check_shellcheck() {
   local sc_output sc_rc
   sc_output="$(shellcheck --format=gcc "${scripts[@]}" 2>/dev/null)" && sc_rc=0 || sc_rc=$?
   if (( sc_rc == 0 )); then
-    ok "shellcheck" "hooks/*.sh + scripts/lib/*.sh — ${#scripts[@]} file(s) clean"
+    ok "shellcheck" "hooks/*.sh + scripts/lib/*.sh + skills/*/scripts/*.sh — ${#scripts[@]} file(s) clean"
   elif [[ -n "$sc_output" ]]; then
     local line
     while IFS= read -r line; do
@@ -1331,6 +1351,7 @@ check_symlinks() {
     "hooks:$HOME/.claude/hooks"
     "settings.json:$HOME/.claude/settings.json"
     "commands:$HOME/.claude/commands"
+    "skills:$HOME/.claude/skills"
   )
 
   for pair in "${pairs[@]}"; do
@@ -1410,6 +1431,11 @@ main() {
   # MCP package references in distributed prose
   echo "MCP Prose References:"
   check_no_mcp_prose
+  echo ""
+
+  # Plugin/MCP manifest files
+  echo "MCP Manifests:"
+  check_no_mcp_manifests
   echo ""
 
   # Hooks
