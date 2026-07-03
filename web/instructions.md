@@ -206,7 +206,7 @@ When introducing, modifying, or removing a convention, pattern, or architectural
 
 ### Debian Baseline
 
-All Linux-targeting guidance assumes Debian 13 (Trixie). Use Debian idioms: `apt` for packaging, `systemd`/`systemctl` for services, `nftables` for firewall, DEB822 `.sources` files for APT. Note Debian-vs-Ubuntu differences (Debian uses `ssh.socket` activation by default, nftables as default backend, minimal cloud-init). Does not apply to macOS, Windows, or container base images dictated by upstream dependencies.
+All Linux-targeting guidance assumes Debian 13 (Trixie). Use Debian idioms: `apt` for packaging, `systemd`/`systemctl` for services, `nftables` for firewall, DEB822 `.sources` files for APT. Note Debian-vs-Ubuntu differences (nftables as default backend, minimal cloud-init; SSH socket-activation state differs by install path on both distros — detect the active unit, do not hard-code it). Does not apply to macOS, Windows, or container base images dictated by upstream dependencies.
 
 ## Review Gates
 
