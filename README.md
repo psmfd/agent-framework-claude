@@ -111,6 +111,7 @@ agent-framework-claude/
 │   ├── secrets-guard/     # hooks/secrets-guard.sh — staged-blob bypass tests (ADR-059)
 │   ├── session-gh-identity-guard/ # hooks/session-gh-identity-guard.sh — PreToolUse JSON contract
 │   ├── session-secrets-guard/     # hooks/session-secrets-guard.sh — PreToolUse JSON contract (ADR-053)
+│   ├── setup-claude-cli/  # setup.sh setup_claude_cli() — CLI install section (ADR-093)
 │   ├── subagent-verdict-guard/    # hooks/subagent-verdict-guard.sh — SubagentStop verdict contract (ADR-088)
 │   ├── validate/          # Clone-and-mutate regression harness for validate.sh (bash 4+; ADR-083)
 │   ├── wim/               # End-to-end tests for scripts/wim/ (stateful az/gh CLI shims)
@@ -186,11 +187,12 @@ agent-framework-claude/
 # 1. Clone the repo
 git clone git@github.com:<your-account>/agent-framework.git ~/.agent-framework
 
-# 2. Run setup (creates symlinks, backs up any existing files)
+# 2. Run setup (creates symlinks, backs up existing files, and offers to
+#    install the Claude Code CLI if it is not already present)
 ~/.agent-framework/setup.sh
 ```
 
-That's it. The setup script handles everything — see [Installation](#installation) for details.
+That's it. The setup script handles everything — see [Installation](#installation) for details. On a bare host, install `git` first (Debian 13: `sudo apt install -y git`; macOS: `xcode-select --install`).
 
 ## How It Works
 
@@ -562,6 +564,7 @@ The setup script:
 - Creates symlinks: `rules/`, `agents/`, `commands/`, `hooks/`, `settings.json` → `~/.claude/`
 - Creates `~/.claude/bash-guard-safe-paths.conf` with default safe paths for the destructive command guard
 - Installs a pre-push git hook that runs `validate.sh` before every push
+- Offers to install the **Claude Code CLI** via Anthropic's native installer (download-then-execute from a pinned domain, consent required, `CLAUDE_CLI_INSTALL=1` to auto-install under `--non-interactive`) when `claude` is absent — see [ADR-093](adrs/093-install-claude-cli-native.md)
 - Skips items that are already correctly linked
 - Is safe to re-run at any time
 - Reports each step with `OK`/`SKIP`/`INFO`/`WARN`/`ERROR` labels and a summary block, exiting non-zero if any step errors (`rules/script-output-conventions.md`)
