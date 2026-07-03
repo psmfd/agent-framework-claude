@@ -79,8 +79,15 @@ class of surface as the existing `/review` command.
   response, it would enter the session transcript before any redaction — a
   structural property of the visible-tool-call model, mitigated server-side
   (API ADR-008 response hygiene) and by the skill's redaction constraints;
-  (2) the secrets-guard pattern set has no bearer/JWT detector — tracked as
-  #64.
+  (2) the secrets-guard pattern set had no bearer/JWT detector when this was
+  written (#64) — since closed by ADR-095, which added JWT and
+  `Authorization: Bearer` patterns and (per the pre-v0.4.0 review) a
+  sensitive-path entry for the config file; (3) the script trusts whatever is
+  bound to the configured loopback port — on a shared or containerized host a
+  local process that squats the port before the real API starts could capture
+  the bearer token from the request. Accepted under the local-trust model of
+  phase 1; a Unix-domain-socket transport with filesystem permissions is the
+  candidate mitigation for the eventual write-capable phase (tracked in #69).
 
 ## More Information
 
