@@ -18,6 +18,9 @@
 #   6. absent, interactive, prompt declined  -> SKIP declined, curl NOT called
 #   7. absent, unsupported platform (uname)  -> WARN unsupported, curl NOT called
 #   8. absent, installer runs but no binary  -> ERROR not found (fail-safe, no abort)
+#   9. absent, curl download fails           -> ERROR download failed, nothing executed
+#  10. absent, installer exits non-zero      -> ERROR installer exited non-zero, no binary
+#  (case 4 also asserts the installer receives the pinned "stable" channel arg)
 #
 # Output per rules/script-output-conventions.md. Exit: 0 all pass, 1 fail, 2 precond.
 # Targets bash 3.2+. Run: bash tests/setup-claude-cli/run-tests.sh
@@ -62,24 +65,50 @@ SH
 
 # A fake `curl` that logs its call and copies a pre-written installer to the -o
 # target (kept as a separate file to avoid nested heredocs, which bash 3.2 does
-# not parse). mode=install -> the installer creates a working
-# $HOME/.local/bin/claude; mode=noop -> it creates nothing (broken install).
+# not parse). Every installer variant logs its argv to $HOME/installer-args.log
+# so tests can assert the pinned channel argument.
+# Modes: install -> installer creates a working $HOME/.local/bin/claude;
+#        noop    -> installer succeeds but creates nothing (broken install);
+#        instfail-> installer exits non-zero;
+#        dlfail  -> curl itself fails (exit 22) and writes no output file.
 shim_curl() {
   local mode="$1"
-  if [ "$mode" = install ]; then
-    cat > "$SHIMS/.installer" <<'INST'
+  case "$mode" in
+    install)
+      cat > "$SHIMS/.installer" <<'INST'
 #!/usr/bin/env bash
+echo "$@" >> "$HOME/installer-args.log"
 mkdir -p "$HOME/.local/bin"
 printf '#!/bin/sh\necho "2.1.199 (Claude Code)"\n' > "$HOME/.local/bin/claude"
 chmod +x "$HOME/.local/bin/claude"
 INST
-  else
-    cat > "$SHIMS/.installer" <<'INST'
+      ;;
+    noop)
+      cat > "$SHIMS/.installer" <<'INST'
 #!/usr/bin/env bash
+echo "$@" >> "$HOME/installer-args.log"
 exit 0
 INST
-  fi
-  cat > "$SHIMS/curl" <<'SH'
+      ;;
+    instfail)
+      cat > "$SHIMS/.installer" <<'INST'
+#!/usr/bin/env bash
+echo "$@" >> "$HOME/installer-args.log"
+exit 1
+INST
+      ;;
+    dlfail)
+      : > "$SHIMS/.installer"   # never used; curl exits before copying
+      ;;
+  esac
+  if [ "$mode" = dlfail ]; then
+    cat > "$SHIMS/curl" <<'SH'
+#!/usr/bin/env bash
+echo "curl $*" >> "$HOME/curl-calls.log"
+exit 22
+SH
+  else
+    cat > "$SHIMS/curl" <<'SH'
 #!/usr/bin/env bash
 echo "curl $*" >> "$HOME/curl-calls.log"
 out=""; prev=""
@@ -87,6 +116,7 @@ for a in "$@"; do [ "$prev" = "-o" ] && out="$a"; prev="$a"; done
 [ -n "$out" ] && cp "$(dirname "$0")/.installer" "$out"
 exit 0
 SH
+  fi
   chmod +x "$SHIMS/curl"
 }
 
@@ -162,6 +192,12 @@ case_ni_optin_install() {
   run_cli 1 0 1 ""
   assert "ni-install" "installed" yes
   if [ -x "$H/.local/bin/claude" ]; then ok "ni-install-binary" "claude landed in ~/.local/bin"; else err "ni-install-binary" "no binary at ~/.local/bin/claude"; errors=$((errors+1)); fi
+  # The installer must receive the pinned channel argument (ADR-093).
+  if grep -q "stable" "$H/installer-args.log" 2>/dev/null; then
+    ok "ni-install-channel" "installer invoked with the pinned stable channel"
+  else
+    err "ni-install-channel" "installer args missing 'stable': $(cat "$H/installer-args.log" 2>/dev/null)"; errors=$((errors+1))
+  fi
 }
 
 # --- Case 5: interactive, accepted -> install ---------------------------------
@@ -194,6 +230,26 @@ case_install_no_binary() {
   assert "install-no-binary" "not found" yes
 }
 
+# --- Case 9: curl download fails -> ERROR, nothing executed --------------------
+case_download_fail() {
+  new_case; shim_curl dlfail
+  run_cli 1 0 1 ""
+  assert "download-fail" "download failed" yes
+  # Nothing was executed: no installer args logged, no binary appeared.
+  if [ ! -e "$H/installer-args.log" ] && [ ! -e "$H/.local/bin/claude" ]; then
+    ok "download-fail-no-exec" "failed download was never executed"
+  else
+    err "download-fail-no-exec" "something executed after a failed download"; errors=$((errors+1))
+  fi
+}
+
+# --- Case 10: installer exits non-zero -> ERROR, fail-safe, no binary ----------
+case_installer_fail() {
+  new_case; shim_curl instfail
+  run_cli 1 0 1 ""
+  assert "installer-fail" "installer exited non-zero" yes
+}
+
 info "setup.sh setup_claude_cli() acceptance tests"
 case_present
 case_dry_run
@@ -203,6 +259,8 @@ case_interactive_accept
 case_interactive_decline
 case_unsupported
 case_install_no_binary
+case_download_fail
+case_installer_fail
 
 echo "=================================="
 if [ "$errors" -gt 0 ]; then echo "FAIL — $errors error(s)"; exit 1; fi
