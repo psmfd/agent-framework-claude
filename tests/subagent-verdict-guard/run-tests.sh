@@ -70,6 +70,9 @@ BASH_BIN="$(command -v bash)"
 # Throwaway config dir: agents/ holds exactly the gated fixture set.
 CONFIG_DIR="$(mktemp -d)"
 TMPDIRS+=("$CONFIG_DIR")
+# Stdin payload file for run_hook (cleanup handles files as well as dirs).
+INFILE="$(mktemp)"
+TMPDIRS+=("$INFILE")
 mkdir -p "$CONFIG_DIR/agents"
 : > "$CONFIG_DIR/agents/shell-expert.md"
 : > "$CONFIG_DIR/agents/code-review-expert.md"
@@ -104,7 +107,12 @@ OUT="" RC=0
 run_hook() {
   local payload="$1" use_path="${2:-$PATH}"
   RC=0
-  OUT="$(printf '%s' "$payload" | CLAUDE_CONFIG_DIR="$CONFIG_DIR" PATH="$use_path" "$BASH_BIN" "$HOOK" 2>&1)" || RC=$?
+  # Feed stdin via file redirection, never `printf | hook`: on skip paths the
+  # hook exits before reading stdin, and under pipefail the printf side can
+  # lose the pipe-close race (EPIPE) and poison the pipeline result — the
+  # bash-3.2 CI failure diagnosed in PR #59 and hardened here per #60.
+  printf '%s' "$payload" > "$INFILE"
+  OUT="$(CLAUDE_CONFIG_DIR="$CONFIG_DIR" PATH="$use_path" "$BASH_BIN" "$HOOK" < "$INFILE" 2>&1)" || RC=$?
 }
 
 assert_silent_allow() {

@@ -63,6 +63,8 @@ BASH_BIN="$(command -v bash)"
 
 ERRFILE="$(mktemp)"
 TMPFILES+=("$ERRFILE")
+INFILE="$(mktemp)"
+TMPFILES+=("$INFILE")
 
 # Synthetic PATH lacking jq (same technique as the sibling suites — symlink the
 # wanted tool set into a throwaway dir; deterministic across host layouts).
@@ -93,7 +95,12 @@ OUT="" ERR="" RC=0
 run_hook() {
   local payload="$1" use_path="${2:-$PATH}"
   RC=0
-  OUT="$(printf '%s' "$payload" | PATH="$use_path" "$BASH_BIN" "$HOOK" 2>"$ERRFILE")" || RC=$?
+  # Feed stdin via file redirection, never `printf | hook`: on skip paths the
+  # hook exits before reading stdin, and under pipefail the printf side can
+  # lose the pipe-close race (EPIPE) and poison the pipeline result — the
+  # bash-3.2 CI failure diagnosed in PR #59 and hardened here per #60.
+  printf '%s' "$payload" > "$INFILE"
+  OUT="$(PATH="$use_path" "$BASH_BIN" "$HOOK" < "$INFILE" 2>"$ERRFILE")" || RC=$?
   ERR="$(cat "$ERRFILE")"
 }
 
