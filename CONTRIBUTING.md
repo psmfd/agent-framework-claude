@@ -64,6 +64,12 @@ Scoping is dynamic: enforcement applies only when the payload's `agent_type` res
 
 Unlike the `PreToolUse` guards, this hook fails **OPEN** on indeterminate state (missing `jq`, absent `last_assistant_message`) — a deliberate ADR-057 inversion, because "block" here forces the subagent to keep running rather than denying one retryable action. Loop safety: `stop_hook_active: true` allows unconditionally (at most one forced retry per stop cycle); the orchestrator's fail-closed consumer defaults (missing verdict → `PARTIAL`/`NEEDS_CHANGES`) remain the backstop everywhere the hook does not fire. Override: `SKIP_SUBAGENT_VERDICT_GUARD=1` (announced). See ADR-088.
 
+#### Global Fan-Out Advisory Nudge
+
+The `fanout-nudge.sh` hook is a global `PostToolBatch` guard registered in `settings.json` (no matcher — the event fires on every parallel tool batch). It is the count half of the return-contract enforcement that `subagent-verdict-guard.sh` began (phase 2 of #24; ADR-090). It is **advisory-only and never blocks — it always exits 0**, emitting a `hookSpecificOutput.additionalContext` nudge only when a batch's `Agent`/`Task`-call count and distinct-`subagent_type` signal is too weak for a would-be Research divergence fan-out (fewer than 3 calls, or 3+ with fewer than 3 distinct types and non-identical prompts). The replication shape (3+ identical `subagent_type` with byte-identical prompts) is recognized and never nudged.
+
+Because `PostToolBatch` carries no task-classification field, fires once per batch (not per turn), and fires after the batch executed, the hook **notifies rather than enforces**: task-classification accuracy, exemption validity, substantive divergence of angles, and any fan-out spread across separate batches stay self-report (the rule's Enforcement line says so explicitly). It matches both the current `Agent` and the pre-rename `Task` tool names, fails **open** uniformly (missing `jq`, empty/malformed input all exit 0 with no nudge), and honors `SKIP_FANOUT_NUDGE=1` (announced). See ADR-090.
+
 #### Inline Agent-Level Hooks
 
 Agent files can define hooks directly in their frontmatter using the `hooks:` field. These hooks are scoped to that specific agent and fire after global hooks. They are not configured in `settings.json`.
@@ -172,7 +178,7 @@ paths:
 
 Rules without `paths` apply universally.
 
-Every rule body carries an `**Enforcement:**` line immediately after its `# Title` (before the first paragraph), stating what mechanism — if any — actually gates the behavior the rule describes: `PreToolUse hook <name>`, `SubagentStop hook <name>`, `pre-commit hook <name>`, `pre-push hook <name>`, `validate.sh <check>`, `CI <workflow>.yml`, `GitHub Ruleset <name>`, or `self-report only`. List multiple mechanisms with `; ` when more than one applies. `self-report only` documents current enforcement reality — it does not diminish the rule's mandatory status. A rule with no automated check is exactly the kind of rule where the self-review diligence in `post-implementation-review.md` matters most. See ADR-084.
+Every rule body carries an `**Enforcement:**` line immediately after its `# Title` (before the first paragraph), stating what mechanism — if any — actually gates the behavior the rule describes: `PreToolUse hook <name>`, `PostToolBatch hook <name>`, `SubagentStop hook <name>`, `pre-commit hook <name>`, `pre-push hook <name>`, `validate.sh <check>`, `CI <workflow>.yml`, `GitHub Ruleset <name>`, or `self-report only`. List multiple mechanisms with `; ` when more than one applies. `self-report only` documents current enforcement reality — it does not diminish the rule's mandatory status. A rule with no automated check is exactly the kind of rule where the self-review diligence in `post-implementation-review.md` matters most. See ADR-084.
 
 ## PR Review
 

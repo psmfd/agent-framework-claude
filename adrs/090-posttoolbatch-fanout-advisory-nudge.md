@@ -1,6 +1,6 @@
 # ADR-090: PostToolBatch Fan-Out Advisory Nudge
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-07-03
 
 ## Context and Problem Statement

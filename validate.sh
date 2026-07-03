@@ -260,7 +260,7 @@ check_enforcement_line() {
     skip "enforcement" "rules/ not present — nothing to check"
     return
   fi
-  local vocab_re='PreToolUse hook|SubagentStop hook|pre-commit hook|pre-push hook|validate\.sh|CI [A-Za-z0-9._-]+\.ya?ml|GitHub Ruleset|self-report only'
+  local vocab_re='PreToolUse hook|PostToolBatch hook|SubagentStop hook|pre-commit hook|pre-push hook|validate\.sh|CI [A-Za-z0-9._-]+\.ya?ml|GitHub Ruleset|self-report only'
   local checked=0 missing=0 f rel hit mech
   for f in "$rules_dir"/*.md; do
     [[ -f "$f" ]] || continue
