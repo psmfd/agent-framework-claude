@@ -255,6 +255,7 @@ The script checks:
 - `disable-model-invocation: true` is present on all agent files
 - Execution-tool policy — `Bash` only on agents in `CLAUDE_BASH_ALLOWED` (ADR-069)
 - No `mcp-servers`/`mcpServers` key in agent frontmatter (errors — the raw frontmatter block is scanned so the YAML-list form is caught; `rules/no-mcp-servers.md`, ADR-002, #25)
+- No concrete MCP package references in distributed prose (warns — `rules/*.md`, `agents/*.md`, `commands/*.md`, and `web/instructions.md` bodies are scanned for the `@modelcontextprotocol/` npm scope and the `mcp-server-<name>` package shape; the bare substring `mcp` is deliberately not matched, so policy discussion never false-positives; `rules/no-mcp-servers.md`, ADR-002, #37)
 - Every `rules/*.md` carries an `**Enforcement:**` line within 5 lines after its H1 (errors when missing; warns when the mechanism token falls outside the vocabulary documented in the Rules frontmatter reference above — #23, ADR-084)
 - Symlinks from `~/.claude/` point to the correct targets
 - Agent catalog drift (via `scripts/regen-agent-catalog.sh --check`, ADR-062/ADR-085): `AGENTS.md` is canonical — name presence vs `agents/*.md` (bidirectional), `rules/agent-first-selection.md` carries the AGENTS.md pointer and no reintroduced table copy, and README Tier vs `AGENTS.md` / README Model vs agent `model:` frontmatter; drift is an error (fix `AGENTS.md`/README by hand). Both table extractions fail loudly on a drifted/reformatted header instead of silently parsing zero rows (#28)

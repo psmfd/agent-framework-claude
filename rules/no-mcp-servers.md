@@ -4,7 +4,7 @@ description: 'Prohibit MCP server references in all agent wrappers, skill files,
 
 # No MCP Servers
 
-**Enforcement:** validate.sh check_agent (frontmatter `mcp-servers`/`mcpServers` key scan, #25); self-report only for body-text package references (#37 tracks a scoped heuristic)
+**Enforcement:** validate.sh check_agent (frontmatter `mcp-servers`/`mcpServers` key scan, #25); validate.sh check_no_mcp_prose (WARN heuristic for concrete package-name patterns in distributed prose, #37)
 
 This repo prohibits MCP server usage in all content it produces or distributes.
 
