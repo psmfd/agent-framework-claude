@@ -106,6 +106,7 @@ agent-framework-claude/
 │   ├── bash-destructive-guard/    # hooks/bash-destructive-guard.sh — compound/wrapper/find/safe-path cases
 │   ├── fanout-nudge/              # hooks/fanout-nudge.sh — PostToolBatch advisory contract (ADR-090)
 │   ├── gh-identity-guard/         # hooks/gh-identity-guard.sh — pre-push identity ladder (ADR-054)
+│   ├── instructions-loaded-log/  # hooks/instructions-loaded-log.sh — InstructionsLoaded logger (ADR-092)
 │   ├── rulesets/          # scripts/rulesets.sh — normalization + apply-rail fixtures (ADR-086)
 │   ├── secrets-guard/     # hooks/secrets-guard.sh — staged-blob bypass tests (ADR-059)
 │   ├── session-gh-identity-guard/ # hooks/session-gh-identity-guard.sh — PreToolUse JSON contract
@@ -146,6 +147,7 @@ agent-framework-claude/
 │   ├── bash-destructive-guard.sh
 │   ├── fanout-nudge.sh
 │   ├── gh-identity-guard.sh
+│   ├── instructions-loaded-log.sh
 │   ├── secrets-guard.sh
 │   ├── session-gh-identity-guard.sh
 │   ├── session-secrets-guard.sh
@@ -298,6 +300,7 @@ Hooks are shell scripts that run in response to Claude Code session events, prov
 | `stop-preflight-check.sh` | `Stop` | Runs a description prompt before the session ends |
 | `subagent-verdict-guard.sh` | `SubagentStop` | Blocks a framework custom agent returning without its verdict line (ADR-088) |
 | `fanout-nudge.sh` | `PostToolBatch` | Advisory-only nudge toward the 3+ divergence minimum; never blocks (ADR-090) |
+| `instructions-loaded-log.sh` | `InstructionsLoaded` | Local metadata-only logger of rule/CLAUDE.md loads; observability-only, never blocks (ADR-092) |
 | `worktree-create.sh` | `PostToolUse` | Enforces symlink containment on worktree creation (ADR-070) |
 | `worktree-remove.sh` | `PostToolUse` | Cleans up worktrees after removal |
 

@@ -33,6 +33,7 @@ tests/session-gh-identity-guard/run-tests.sh # session-gh-identity-guard.sh PreT
 tests/bash-destructive-guard/run-tests.sh   # bash-destructive-guard.sh command classifier
 tests/subagent-verdict-guard/run-tests.sh   # subagent-verdict-guard.sh SubagentStop contract (ADR-088)
 tests/fanout-nudge/run-tests.sh             # fanout-nudge.sh PostToolBatch advisory contract (ADR-090)
+tests/instructions-loaded-log/run-tests.sh  # instructions-loaded-log.sh InstructionsLoaded logger (ADR-092)
 tests/validate/run-tests.sh                 # validate.sh clone-and-mutate regression (bash 4+)
 tests/wim/run-tests.sh                      # end-to-end work-item scripts via CLI shims
 tests/worktree-guard/run-tests.sh           # worktree-create.sh symlink containment (ADR-070)
