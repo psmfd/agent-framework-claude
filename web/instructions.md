@@ -286,7 +286,7 @@ Before committing or pushing, scan staged content manually for:
 - AWS access key IDs — `AKIA`, `ASIA`, `ABIA`, or `ACCA` followed by 16 uppercase alphanumerics.
 - GitHub tokens — `gh[oprsu]_[A-Za-z0-9]{36,}` (all five prefixes: `ghp_`, `gho_`, `ghu_`, `ghs_` Actions `GITHUB_TOKEN`, `ghr_`) and `github_pat_[A-Za-z0-9_]{82,}`; body length is open-ended because GitHub is rolling out a longer `ghs_` format.
 - Signed JWTs — three dot-separated base64url segments with header and payload both starting `eyJ` (each 10+ chars, signature 10+); unsigned/`alg:none` tokens are out of scope (ADR-095).
-- Bearer-token literals — `Authorization: Bearer` followed by 20+ contiguous token characters; format placeholders (`%s`, `<key>`, `$VAR`) never match (ADR-095).
+- Bearer-token literals — `Authorization: Bearer` (matched case-insensitively) followed by 20+ contiguous token characters; format placeholders (`%s`, `<key>`, `$VAR`) never match (ADR-095).
 - SSH key files — basenames `id_rsa`, `id_dsa`, `id_ecdsa`, `id_ed25519`, `id_ecdsa_sk`, `id_ed25519_sk` (FIDO2 keys; and `.pem` variants); any `*.pem` or `*.key` file.
 
 Never commit secrets. Pre-commit prevention is significantly cheaper than post-push rotation. In the framework repo this is enforced in two layers sharing one pattern set: a `secrets-guard.sh` pre-commit hook (layer 1) and a `session-secrets-guard.sh` `PreToolUse` hook (layer 2) that denies the same material on `Bash`/`Write`/`Edit`/`MultiEdit`/`NotebookEdit` before it reaches disk. Both honor `SKIP_SECRETS_GUARD=1` and `.secrets-guard-allowlist`. The in-session hook needs `jq` to parse the tool call, so it fails closed (denies) when `jq` is absent rather than silently disabling — the `SKIP_SECRETS_GUARD` bypass still works without `jq`.
