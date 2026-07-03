@@ -70,6 +70,10 @@ The `fanout-nudge.sh` hook is a global `PostToolBatch` guard registered in `sett
 
 Because `PostToolBatch` carries no task-classification field, fires once per batch (not per turn), and fires after the batch executed, the hook **notifies rather than enforces**: task-classification accuracy, exemption validity, substantive divergence of angles, and any fan-out spread across separate batches stay self-report (the rule's Enforcement line says so explicitly). It matches both the current `Agent` and the pre-rename `Task` tool names, fails **open** uniformly (missing `jq`, empty/malformed input all exit 0 with no nudge), and honors `SKIP_FANOUT_NUDGE=1` (announced). See ADR-090.
 
+#### Global Instructions-Loaded Logger
+
+The `instructions-loaded-log.sh` hook is a global `InstructionsLoaded` logger registered in `settings.json` (no matcher — fires on every CLAUDE.md/rules load). It is the framework's first **observability** hook and its first to write persistent local state. `InstructionsLoaded` is observability-only — its exit code is ignored, it cannot block or modify loading, and its stdout is discarded from context — so a local, metadata-only logger is compatible with `rules/no-mcp-servers.md` (ADR-092). It appends one compact JSON line per load (timestamp, `session_id`, `load_reason`, `memory_type`, byte size via `wc -c`, `file_path` — never file or conversation content) to `~/.claude/logs/instructions-loaded.jsonl` (dir `chmod 700`, file `chmod 600`). Fail-open, always exit 0; a payload with no `file_path` is a clean no-op. Override: `SKIP_INSTRUCTIONS_LOG=1` (silent — announcing per load would spam). Two known upstream gaps (no `/clear` fire; ~3× duplication on `/compact`) are analysis caveats, not worked around in the hook. See ADR-092.
+
 #### Inline Agent-Level Hooks
 
 Agent files can define hooks directly in their frontmatter using the `hooks:` field. These hooks are scoped to that specific agent and fire after global hooks. They are not configured in `settings.json`.

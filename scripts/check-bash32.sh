@@ -100,6 +100,7 @@ smoke_hook bash-destructive-guard.sh    '{"tool_name":"Write","tool_input":{}}' 
 smoke_hook stop-preflight-check.sh      '{}' 0 "empty payload allowed"
 smoke_hook fanout-nudge.sh              '{"tool_calls":[]}' 0 "empty batch allowed"
 smoke_hook subagent-verdict-guard.sh    '{}' 0 "empty payload allowed"
+smoke_hook instructions-loaded-log.sh   '{}' 0 "empty payload allowed"
 
 # gh-identity-guard.sh (pre-push contract): non-github remote passes silently.
 rc=0
@@ -116,7 +117,8 @@ fi
 # requires bash 4.0+ by design (see its header).
 for suite in secrets-guard worktree-guard gh-identity-guard \
              session-gh-identity-guard session-secrets-guard \
-             bash-destructive-guard rulesets fanout-nudge subagent-verdict-guard; do
+             bash-destructive-guard rulesets fanout-nudge subagent-verdict-guard \
+             instructions-loaded-log; do
   runner="$REPO_DIR/tests/$suite/run-tests.sh"
   if [ ! -f "$runner" ]; then
     skip "suite" "tests/$suite/run-tests.sh not found"
