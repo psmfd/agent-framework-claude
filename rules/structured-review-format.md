@@ -4,7 +4,7 @@ description: 'Require structured output format with severity classification, fin
 
 # Structured Review Format
 
-**Enforcement:** self-report only — no automated check parses review-agent output for format compliance (#24 tracks mechanical enforcement)
+**Enforcement:** SubagentStop hook subagent-verdict-guard.sh (`**Verdict:**` line presence — ADR-088); self-report only for severity classification and findings-table format
 
 When producing review output — whether from a dedicated review agent, the linter, or a self-review pass — use this structured format.
 
@@ -70,7 +70,7 @@ A review agent that cannot form a judgment — the diff is inaccessible, unreada
 
 ### Fail-Closed Default for a Missing Verdict Line
 
-A review agent response with no `**Verdict:**` line at all — truncated output, a crashed subagent, malformed formatting — is treated as `NEEDS_CHANGES` by the consuming orchestrator, never as `PASS`. This is a fail-closed default: an orchestrator that cannot confirm a review passed must not proceed as though it did. This deliberately does not match the research-agent default in `research-parallelism.md` (`PARTIAL`) — a partial finding on a research question is still usable input; a review response with no verdict is not usable evidence that a diff is safe to merge.
+A review agent response with no `**Verdict:**` line at all — truncated output, a crashed subagent, malformed formatting — is treated as `NEEDS_CHANGES` by the consuming orchestrator, never as `PASS`. (Where Claude Code hooks are active, the SubagentStop guard — `hooks/subagent-verdict-guard.sh`, ADR-088 — forces the line before a framework review agent can return, making this state rare; the fail-closed default remains authoritative wherever the hook does not fire.) This is a fail-closed default: an orchestrator that cannot confirm a review passed must not proceed as though it did. This deliberately does not match the research-agent default in `research-parallelism.md` (`PARTIAL`) — a partial finding on a research question is still usable input; a review response with no verdict is not usable evidence that a diff is safe to merge.
 
 ## When this rule applies
 
