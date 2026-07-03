@@ -104,11 +104,15 @@ agent-framework-claude/
 ├── tests/                 # Test suites for project tooling (each suite: run-tests.sh, exit 0 PASS / 1 FAIL)
 │   ├── fixtures/bin/gh    # Deterministic gh shim shared by the identity-guard suites (ADR-083)
 │   ├── bash-destructive-guard/    # hooks/bash-destructive-guard.sh — compound/wrapper/find/safe-path cases
+│   ├── fanout-nudge/              # hooks/fanout-nudge.sh — PostToolBatch advisory contract (ADR-090)
 │   ├── gh-identity-guard/         # hooks/gh-identity-guard.sh — pre-push identity ladder (ADR-054)
+│   ├── instructions-loaded-log/  # hooks/instructions-loaded-log.sh — InstructionsLoaded logger (ADR-092)
 │   ├── rulesets/          # scripts/rulesets.sh — normalization + apply-rail fixtures (ADR-086)
 │   ├── secrets-guard/     # hooks/secrets-guard.sh — staged-blob bypass tests (ADR-059)
 │   ├── session-gh-identity-guard/ # hooks/session-gh-identity-guard.sh — PreToolUse JSON contract
 │   ├── session-secrets-guard/     # hooks/session-secrets-guard.sh — PreToolUse JSON contract (ADR-053)
+│   ├── setup-claude-cli/  # setup.sh setup_claude_cli() — CLI install section (ADR-093)
+│   ├── subagent-verdict-guard/    # hooks/subagent-verdict-guard.sh — SubagentStop verdict contract (ADR-088)
 │   ├── validate/          # Clone-and-mutate regression harness for validate.sh (bash 4+; ADR-083)
 │   ├── wim/               # End-to-end tests for scripts/wim/ (stateful az/gh CLI shims)
 │   └── worktree-guard/    # hooks/worktree-create.sh — symlink containment (ADR-070)
@@ -142,11 +146,14 @@ agent-framework-claude/
 │   └── review.md          # /review — 3-way parallel review (code + security + linter)
 ├── hooks/                 # Shell scripts for Claude Code and git hooks
 │   ├── bash-destructive-guard.sh
+│   ├── fanout-nudge.sh
 │   ├── gh-identity-guard.sh
+│   ├── instructions-loaded-log.sh
 │   ├── secrets-guard.sh
 │   ├── session-gh-identity-guard.sh
 │   ├── session-secrets-guard.sh
 │   ├── stop-preflight-check.sh
+│   ├── subagent-verdict-guard.sh
 │   ├── worktree-create.sh
 │   └── worktree-remove.sh
 ├── rules/                 # Claude Code user-level behavioral rules
@@ -180,11 +187,12 @@ agent-framework-claude/
 # 1. Clone the repo
 git clone git@github.com:<your-account>/agent-framework.git ~/.agent-framework
 
-# 2. Run setup (creates symlinks, backs up any existing files)
+# 2. Run setup (creates symlinks, backs up existing files, and offers to
+#    install the Claude Code CLI if it is not already present)
 ~/.agent-framework/setup.sh
 ```
 
-That's it. The setup script handles everything — see [Installation](#installation) for details.
+That's it. The setup script handles everything — see [Installation](#installation) for details. On a bare host, install `git` first (Debian 13: `sudo apt install -y git`; macOS: `xcode-select --install`).
 
 ## How It Works
 
@@ -292,6 +300,9 @@ Hooks are shell scripts that run in response to Claude Code session events, prov
 | `session-gh-identity-guard.sh` | `PreToolUse` | Denies mutating `gh`/`git push` ops when the active GitHub identity is wrong |
 | `gh-identity-guard.sh` | git `pre-push` | Blocks pushes from the wrong GitHub account (raw terminal/IDE vector) |
 | `stop-preflight-check.sh` | `Stop` | Runs a description prompt before the session ends |
+| `subagent-verdict-guard.sh` | `SubagentStop` | Blocks a framework custom agent returning without its verdict line (ADR-088) |
+| `fanout-nudge.sh` | `PostToolBatch` | Advisory-only nudge toward the 3+ divergence minimum; never blocks (ADR-090) |
+| `instructions-loaded-log.sh` | `InstructionsLoaded` | Local metadata-only logger of rule/CLAUDE.md loads; observability-only, never blocks (ADR-092) |
 | `worktree-create.sh` | `PostToolUse` | Enforces symlink containment on worktree creation (ADR-070) |
 | `worktree-remove.sh` | `PostToolUse` | Cleans up worktrees after removal |
 
@@ -553,6 +564,7 @@ The setup script:
 - Creates symlinks: `rules/`, `agents/`, `commands/`, `hooks/`, `settings.json` → `~/.claude/`
 - Creates `~/.claude/bash-guard-safe-paths.conf` with default safe paths for the destructive command guard
 - Installs a pre-push git hook that runs `validate.sh` before every push
+- Offers to install the **Claude Code CLI** via Anthropic's native installer (download-then-execute from a pinned domain, consent required, `CLAUDE_CLI_INSTALL=1` to auto-install under `--non-interactive`) when `claude` is absent — see [ADR-093](adrs/093-install-claude-cli-native.md)
 - Skips items that are already correctly linked
 - Is safe to re-run at any time
 - Reports each step with `OK`/`SKIP`/`INFO`/`WARN`/`ERROR` labels and a summary block, exiting non-zero if any step errors (`rules/script-output-conventions.md`)

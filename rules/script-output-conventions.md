@@ -1,5 +1,7 @@
 ---
 description: 'Standardize output format, exit codes, and summary blocks for all scripts produced by the agent framework'
+paths:
+  - "**/*.sh"
 ---
 
 # Script Output Conventions

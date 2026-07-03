@@ -4,7 +4,7 @@ description: 'Enforce multi-agent research with minimum three agents, quorum-bas
 
 # Research Parallelism
 
-**Enforcement:** self-report only — no hook or CI observes `Agent` tool invocation counts or fan-out composition (#24 tracks mechanical enforcement)
+**Enforcement:** SubagentStop hook subagent-verdict-guard.sh (verdict-line presence on framework custom agents — ADR-088); PostToolBatch hook fanout-nudge.sh (advisory nudge on a batch-local `Agent`-call count / distinct-`subagent_type` signal — ADR-090); self-report only for task-classification accuracy, exemption validity, substantive divergence of angles, and any fan-out spread across separate batches or turns (#44)
 
 This rule is mandatory, not advisory. When the orchestrator protocol classifies a task as Research, this rule applies in full. There are no soft opt-outs. See the Fan-Out Shapes and Aggregation Policy table in [orchestrator-protocol.md](orchestrator-protocol.md) for how this shape's aggregation compares to replication and multi-reviewer commands.
 
@@ -51,9 +51,9 @@ Every parallel agent's response must be aggregable without parsing free-form pro
 - `PARTIAL` — part of the question is answered; the unresolved items are named in the summary.
 - `BLOCKED` — the agent could not proceed (missing context, conflicting requirement, or a question outside its domain); the reason is named in the summary.
 
-Review agents governed by `structured-review-format.md` (`code-review-expert`, `security-review-expert`, `linter`) use that rule's `**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES | UNABLE_TO_REVIEW` line as their verdict and do NOT emit a second `AGENT-VERDICT:` line. That rule also defines a fail-closed default when the verdict line is missing entirely — see `structured-review-format.md`.
+Review agents governed by `structured-review-format.md` (`code-review-expert`, `security-review-expert`, `linter`) use that rule's `**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES | UNABLE_TO_REVIEW` line as their verdict and do NOT emit a second `AGENT-VERDICT:` line — except when a review agent is answering a research question rather than reviewing an artifact (e.g. `security-review-expert`'s documented advisory mode): that output is a research response and ends with the non-review `AGENT-VERDICT:` terminal line above instead. The distinction is what the response is: reviewing a supplied artifact (even a draft or design) takes the review verdict; a pure advisory/research answer takes the research contract. That rule also defines a fail-closed default when the verdict line is missing entirely — see `structured-review-format.md`.
 
-**Synthesizer obligations** — the orchestrator treats a non-review agent response with no verdict line as `PARTIAL`; treats a review-agent response with no `**Verdict:**` line as `NEEDS_CHANGES` per the fail-closed default in `structured-review-format.md` (never `PARTIAL` and never `PASS`); surfaces any `BLOCKED` or `UNABLE_TO_REVIEW` verdict to the user before synthesizing; and reuses each agent's executive summary as the "key contributions" entry in the Agent Efficacy Report.
+**Synthesizer obligations** — the orchestrator treats a non-review agent response with no verdict line as `PARTIAL`; treats a review-agent response with no `**Verdict:**` line as `NEEDS_CHANGES` per the fail-closed default in `structured-review-format.md` (never `PARTIAL` and never `PASS`); surfaces any `BLOCKED` or `UNABLE_TO_REVIEW` verdict to the user before synthesizing; and reuses each agent's executive summary as the "key contributions" entry in the Agent Efficacy Report. Where Claude Code hooks are active, the SubagentStop guard (`hooks/subagent-verdict-guard.sh`, ADR-088) forces the verdict line before a framework custom agent can return; these consumer-side defaults remain authoritative everywhere the hook does not fire (hooks disabled, ungated agent types such as general-purpose, non-hook surfaces) — the hook enforces presence, never truthfulness.
 
 ### Synthesis Procedure
 

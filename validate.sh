@@ -260,7 +260,7 @@ check_enforcement_line() {
     skip "enforcement" "rules/ not present — nothing to check"
     return
   fi
-  local vocab_re='PreToolUse hook|pre-commit hook|pre-push hook|validate\.sh|CI [A-Za-z0-9._-]+\.ya?ml|GitHub Ruleset|self-report only'
+  local vocab_re='PreToolUse hook|PostToolBatch hook|SubagentStop hook|pre-commit hook|pre-push hook|validate\.sh|CI [A-Za-z0-9._-]+\.ya?ml|GitHub Ruleset|self-report only'
   local checked=0 missing=0 f rel hit mech
   for f in "$rules_dir"/*.md; do
     [[ -f "$f" ]] || continue
@@ -285,6 +285,37 @@ check_enforcement_line() {
     warn "enforcement" "no rule files found under rules/"
   elif [[ $missing -eq 0 ]]; then
     ok "enforcement" "$checked rule(s) carry an Enforcement line"
+  fi
+}
+
+# --- Check for concrete MCP package references in distributed prose ---
+# rules/no-mcp-servers.md also prohibits referencing MCP server packages in
+# the content this repo distributes. check_agent covers the frontmatter key
+# (#25); this heuristic covers prose bodies (#37). It matches concrete
+# package-name shapes only — the '@modelcontextprotocol/' npm scope and the
+# 'mcp-server-<name>' npm/PyPI naming convention — never the bare substring
+# 'mcp', so policy discussion (rules/no-mcp-servers.md itself, references to
+# the 'mcp-servers' frontmatter key, and the rule's filename) does not
+# false-positive. WARN-level: a heuristic over prose, not a hard gate.
+check_no_mcp_prose() {
+  local pattern='@modelcontextprotocol/|mcp-server-[a-z0-9]'
+  local scanned=0 flagged=0 f rel lineno rest
+  for f in "$DOTFILES_DIR"/rules/*.md "$DOTFILES_DIR"/agents/*.md \
+           "$DOTFILES_DIR"/commands/*.md "$DOTFILES_DIR"/web/instructions.md; do
+    [[ -f "$f" ]] || continue
+    scanned=$((scanned + 1))
+    rel="${f#"$DOTFILES_DIR"/}"
+    while IFS=: read -r lineno rest; do
+      [[ -n "$lineno" ]] || continue
+      warn "mcp-prose" "$rel:$lineno: concrete MCP package reference in distributed prose (rules/no-mcp-servers.md, ADR-002)"
+      detail "$rest"
+      flagged=$((flagged + 1))
+    done < <(grep -inE "$pattern" "$f")
+  done
+  if [[ $scanned -eq 0 ]]; then
+    skip "mcp-prose" "no distributed prose surfaces found"
+  elif [[ $flagged -eq 0 ]]; then
+    ok "mcp-prose" "$scanned file(s) free of concrete MCP package references"
   fi
 }
 
@@ -1374,6 +1405,11 @@ main() {
   # Rule Enforcement lines
   echo "Enforcement Lines:"
   check_enforcement_line
+  echo ""
+
+  # MCP package references in distributed prose
+  echo "MCP Prose References:"
+  check_no_mcp_prose
   echo ""
 
   # Hooks

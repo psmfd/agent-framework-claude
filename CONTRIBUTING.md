@@ -56,6 +56,24 @@ Signal is hybrid: a local-only (gitignored) `<repo>/.gh-expected-identity` pin (
 
 The git pre-push hook is the first **git-only** hook category in this repo: unlike the Claude Code `PreToolUse` hooks, it has no `settings.json` entry. `validate.sh check_hooks` verifies the git-only scripts (`secrets-guard.sh`, `gh-identity-guard.sh`) exist and are executable.
 
+#### Global Subagent Verdict Guard
+
+The `subagent-verdict-guard.sh` hook is a global `SubagentStop` guard registered in `settings.json` (no matcher — scoping happens in-hook). When a framework custom agent finishes without its machine-parseable verdict line, the hook blocks the stop (exit 2) and the block reason is delivered to the subagent as its next instruction, forcing it to append the line — mechanical enforcement of the return contract in `rules/research-parallelism.md` and `rules/structured-review-format.md` (phase 1 of #24; ADR-088).
+
+Scoping is dynamic: enforcement applies only when the payload's `agent_type` resolves to a file in `~/.claude/agents/` — the agents symlink IS the allowlist, so catalog changes need no hook edit. Built-ins (`general-purpose`, `Explore`, `Plan`, …) and unknown types always pass. Detection accepts either verdict grammar (terminal `AGENT-VERDICT:` line, or a `**Verdict:**` line outside fenced code blocks), so a review agent doing advisory research work is never false-blocked.
+
+Unlike the `PreToolUse` guards, this hook fails **OPEN** on indeterminate state (missing `jq`, absent `last_assistant_message`) — a deliberate ADR-057 inversion, because "block" here forces the subagent to keep running rather than denying one retryable action. Loop safety: `stop_hook_active: true` allows unconditionally (at most one forced retry per stop cycle); the orchestrator's fail-closed consumer defaults (missing verdict → `PARTIAL`/`NEEDS_CHANGES`) remain the backstop everywhere the hook does not fire. Override: `SKIP_SUBAGENT_VERDICT_GUARD=1` (announced). See ADR-088.
+
+#### Global Fan-Out Advisory Nudge
+
+The `fanout-nudge.sh` hook is a global `PostToolBatch` guard registered in `settings.json` (no matcher — the event fires on every parallel tool batch). It is the count half of the return-contract enforcement that `subagent-verdict-guard.sh` began (phase 2 of #24; ADR-090). It is **advisory-only and never blocks — it always exits 0**, emitting a `hookSpecificOutput.additionalContext` nudge only when a batch's `Agent`/`Task`-call count and distinct-`subagent_type` signal is too weak for a would-be Research divergence fan-out (fewer than 3 calls, or 3+ with fewer than 3 distinct types and non-identical prompts). The replication shape (3+ identical `subagent_type` with byte-identical prompts) is recognized and never nudged.
+
+Because `PostToolBatch` carries no task-classification field, fires once per batch (not per turn), and fires after the batch executed, the hook **notifies rather than enforces**: task-classification accuracy, exemption validity, substantive divergence of angles, and any fan-out spread across separate batches stay self-report (the rule's Enforcement line says so explicitly). It matches both the current `Agent` and the pre-rename `Task` tool names, fails **open** uniformly (missing `jq`, empty/malformed input all exit 0 with no nudge), and honors `SKIP_FANOUT_NUDGE=1` (announced). See ADR-090.
+
+#### Global Instructions-Loaded Logger
+
+The `instructions-loaded-log.sh` hook is a global `InstructionsLoaded` logger registered in `settings.json` (no matcher — fires on every CLAUDE.md/rules load). It is the framework's first **observability** hook and its first to write persistent local state. `InstructionsLoaded` is observability-only — its exit code is ignored, it cannot block or modify loading, and its stdout is discarded from context — so a local, metadata-only logger is compatible with `rules/no-mcp-servers.md` (ADR-092). It appends one compact JSON line per load (timestamp, `session_id`, `load_reason`, `memory_type`, byte size via `wc -c`, `file_path` — never file or conversation content) to `~/.claude/logs/instructions-loaded.jsonl` (dir `chmod 700`, file `chmod 600`). Fail-open, always exit 0; a payload with no `file_path` is a clean no-op. Override: `SKIP_INSTRUCTIONS_LOG=1` (silent — announcing per load would spam). Two known upstream gaps (no `/clear` fire; ~3× duplication on `/compact`) are analysis caveats, not worked around in the hook. See ADR-092.
+
 #### Inline Agent-Level Hooks
 
 Agent files can define hooks directly in their frontmatter using the `hooks:` field. These hooks are scoped to that specific agent and fire after global hooks. They are not configured in `settings.json`.
@@ -164,7 +182,7 @@ paths:
 
 Rules without `paths` apply universally.
 
-Every rule body carries an `**Enforcement:**` line immediately after its `# Title` (before the first paragraph), stating what mechanism — if any — actually gates the behavior the rule describes: `PreToolUse hook <name>`, `pre-commit hook <name>`, `pre-push hook <name>`, `validate.sh <check>`, `CI <workflow>.yml`, `GitHub Ruleset <name>`, or `self-report only`. List multiple mechanisms with `; ` when more than one applies. `self-report only` documents current enforcement reality — it does not diminish the rule's mandatory status. A rule with no automated check is exactly the kind of rule where the self-review diligence in `post-implementation-review.md` matters most. See ADR-084.
+Every rule body carries an `**Enforcement:**` line immediately after its `# Title` (before the first paragraph), stating what mechanism — if any — actually gates the behavior the rule describes: `PreToolUse hook <name>`, `PostToolBatch hook <name>`, `SubagentStop hook <name>`, `pre-commit hook <name>`, `pre-push hook <name>`, `validate.sh <check>`, `CI <workflow>.yml`, `GitHub Ruleset <name>`, or `self-report only`. List multiple mechanisms with `; ` when more than one applies. `self-report only` documents current enforcement reality — it does not diminish the rule's mandatory status. A rule with no automated check is exactly the kind of rule where the self-review diligence in `post-implementation-review.md` matters most. See ADR-084.
 
 ## PR Review
 
@@ -247,6 +265,7 @@ The script checks:
 - `disable-model-invocation: true` is present on all agent files
 - Execution-tool policy — `Bash` only on agents in `CLAUDE_BASH_ALLOWED` (ADR-069)
 - No `mcp-servers`/`mcpServers` key in agent frontmatter (errors — the raw frontmatter block is scanned so the YAML-list form is caught; `rules/no-mcp-servers.md`, ADR-002, #25)
+- No concrete MCP package references in distributed prose (warns — `rules/*.md`, `agents/*.md`, `commands/*.md`, and `web/instructions.md` bodies are scanned for the `@modelcontextprotocol/` npm scope and the `mcp-server-<name>` package shape; the bare substring `mcp` is deliberately not matched, so policy discussion never false-positives; `rules/no-mcp-servers.md`, ADR-002, #37)
 - Every `rules/*.md` carries an `**Enforcement:**` line within 5 lines after its H1 (errors when missing; warns when the mechanism token falls outside the vocabulary documented in the Rules frontmatter reference above — #23, ADR-084)
 - Symlinks from `~/.claude/` point to the correct targets
 - Agent catalog drift (via `scripts/regen-agent-catalog.sh --check`, ADR-062/ADR-085): `AGENTS.md` is canonical — name presence vs `agents/*.md` (bidirectional), `rules/agent-first-selection.md` carries the AGENTS.md pointer and no reintroduced table copy, and README Tier vs `AGENTS.md` / README Model vs agent `model:` frontmatter; drift is an error (fix `AGENTS.md`/README by hand). Both table extractions fail loudly on a drifted/reformatted header instead of silently parsing zero rows (#28)

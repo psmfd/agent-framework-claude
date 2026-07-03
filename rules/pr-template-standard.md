@@ -1,5 +1,7 @@
 ---
 description: 'Require standardized PR template sections across all ecosystem repositories'
+paths:
+  - "**/PULL_REQUEST_TEMPLATE.md"
 ---
 
 # PR Template Standard
