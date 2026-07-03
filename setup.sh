@@ -18,6 +18,8 @@
 #   SETUP_SKIP_SYMLINKS   Skip the ~/.claude symlink step.
 #   SETUP_SKIP_GIT_HOOKS  Skip installing the pre-push / pre-commit git hooks.
 #   DOTFILES_DIR          Override the detected repo root (advanced/non-standard layouts).
+#   CLAUDE_CLI_INSTALL    Set to 1 to install the Claude Code CLI without prompting
+#                         under --non-interactive (opt-in; the CLI step prompts otherwise).
 #
 # Exit codes:
 #   0  All steps completed without errors.
@@ -337,6 +339,83 @@ setup_bashguard() {
 CONF
 }
 
+# --- Section: install the Claude Code CLI when absent (issue #48, ADR-093) ---
+# The framework symlinks a distribution into ~/.claude/ but nothing consumes it
+# without the `claude` binary. This step installs it via Anthropic's official
+# NATIVE installer, using download-then-execute (never a streamed `curl | bash`
+# pipe) from a pinned, literal, non-overridable domain — a deliberate, scoped
+# exception to the repo's remote-content caution (ADR-093): a one-time,
+# user-initiated, first-party install of the trust root the framework already
+# depends on. Consent is REQUIRED and distinct from --non-interactive. Always
+# returns 0 so a failure here never aborts the rest of setup (it reports ERROR
+# and the summary reflects it). bash-3.2-safe.
+setup_claude_cli() {
+  local install_url="https://claude.ai/install.sh"    # pinned; never env/user-overridable (ADR-093)
+  local docs_url="https://code.claude.com/docs/en/setup"
+  local claude_bin="$HOME/.local/bin/claude"          # native installer target
+  local tmp
+
+  if command -v claude >/dev/null 2>&1; then
+    ok "claude-cli" "already installed ($(claude --version 2>/dev/null || printf 'version unknown'))"
+    return 0
+  fi
+
+  # The native installer supports macOS and Linux (incl. WSL); skip elsewhere.
+  case "$(uname -s)" in
+    Darwin|Linux) : ;;
+    *) warn "claude-cli" "unsupported platform ($(uname -s)) — install manually: $docs_url"; return 0 ;;
+  esac
+
+  # Consent gate — fetching+executing an installer is a bigger action than a
+  # symlink, so it needs its own explicit opt-in, NOT --non-interactive's
+  # "skip optional steps" default.
+  if [ "$NON_INTERACTIVE" = "1" ]; then
+    if [ "${CLAUDE_CLI_INSTALL:-0}" != "1" ]; then
+      skip "claude-cli" "non-interactive — set CLAUDE_CLI_INSTALL=1 to install, or install manually: $docs_url"
+      return 0
+    fi
+  else
+    prompt_yn "Claude Code CLI not found. Download and install it from $install_url?" n
+    if [ "$PROMPT_YN" != "y" ]; then
+      skip "claude-cli" "declined — install manually: $docs_url"
+      return 0
+    fi
+  fi
+
+  if [ "$DRY_RUN" = "1" ]; then
+    info "would: download $install_url and execute it to install the Claude Code CLI"
+    return 0
+  fi
+
+  # Download-then-execute: produces an inspectable artifact and avoids
+  # partial-download-partial-execute (never `curl ... | bash`). ADR-093.
+  tmp="$(mktemp)" || { err "claude-cli" "mktemp failed — install manually: $docs_url"; return 0; }
+  info "[claude-cli] downloading installer from $install_url"
+  if ! curl -fsSL "$install_url" -o "$tmp"; then
+    err "claude-cli" "download failed from $install_url — install manually: $docs_url"
+    rm -f "$tmp"
+    return 0
+  fi
+  info "[claude-cli] running downloaded installer (pinned channel: stable)"
+  if ! bash "$tmp" stable; then
+    err "claude-cli" "installer exited non-zero — see output above; install manually: $docs_url"
+    rm -f "$tmp"
+    return 0
+  fi
+  rm -f "$tmp"
+
+  # Verify — the installer lands the binary in ~/.local/bin, which may not be on
+  # the current shell's PATH yet, so check that path too.
+  if command -v claude >/dev/null 2>&1; then
+    ok "claude-cli" "installed: $(claude --version 2>/dev/null || printf 'version unknown')"
+  elif [ -x "$claude_bin" ]; then
+    ok "claude-cli" "installed at $claude_bin ($("$claude_bin" --version 2>/dev/null || printf 'version unknown')) — ensure ~/.local/bin is on PATH"
+  else
+    err "claude-cli" "installer ran but 'claude' not found — verify manually: $docs_url"
+  fi
+  return 0
+}
+
 main() {
   info "Agent Framework setup — source: $DOTFILES_DIR"
   [ "$DRY_RUN" = "1" ] && info "dry-run mode — no changes will be made"
@@ -347,8 +426,14 @@ main() {
   setup_git_hooks
   setup_gh_pin
   setup_bashguard
+  setup_claude_cli
 
   print_summary
 }
 
-main "$@"
+# Run main only when executed directly, not when sourced (e.g. by the test suite
+# in tests/setup-claude-cli/, which sources this file to exercise setup_claude_cli
+# in isolation). bash-3.2-safe.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  main "$@"
+fi

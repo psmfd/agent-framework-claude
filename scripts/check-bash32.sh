@@ -118,7 +118,7 @@ fi
 for suite in secrets-guard worktree-guard gh-identity-guard \
              session-gh-identity-guard session-secrets-guard \
              bash-destructive-guard rulesets fanout-nudge subagent-verdict-guard \
-             instructions-loaded-log; do
+             instructions-loaded-log setup-claude-cli; do
   runner="$REPO_DIR/tests/$suite/run-tests.sh"
   if [ ! -f "$runner" ]; then
     skip "suite" "tests/$suite/run-tests.sh not found"
