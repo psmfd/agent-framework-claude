@@ -154,7 +154,11 @@ VAULT_HEADER_RE='^\$ANSIBLE_VAULT;[0-9]+\.[0-9]+;[A-Z0-9]+'
 # GITHUB_TOKEN), ghr_ (refresh). The body bound is OPEN ({36,}, {82,}) because
 # GitHub treats tokens as opaque and is rolling out a longer ghs_ format
 # (~520 chars) — a fixed length would silently miss new tokens (#211, ADR-057).
-SECRET_PATTERNS='-----BEGIN (RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY|(^|[^A-Z0-9])(AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}([^A-Z0-9]|$)|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{82,}'
+# JWT: signed tokens only (header.payload.signature, both segments base64url
+# starting eyJ = '{"'); unsigned/alg:none tokens are out of scope (#64,
+# ADR-095). Bearer: a high-entropy literal after "Authorization: Bearer " —
+# placeholders (%s, <key>, $VAR) don't match the 20+ token-char requirement.
+SECRET_PATTERNS='-----BEGIN (RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY|(^|[^A-Z0-9])(AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}([^A-Z0-9]|$)|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{82,}|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|Authorization: Bearer [A-Za-z0-9._~+/=-]{20,}'
 
 # --- Counters ---
 errors=0
