@@ -75,8 +75,10 @@
 # ADR-086, plus the WARN-not-SKIP check_shellcheck rewrite). A bare clone
 # would exercise the OLD validate.sh and every rulesets-* / shellcheck-absent
 # case below would fail against gate logic that doesn't exist yet. This
-# harness deliberately overlays $REPO_ROOT's *working-tree* validate.sh and
-# rulesets/ onto the fixture immediately after cloning (see "Overlay" below)
+# harness deliberately overlays $REPO_ROOT's *working-tree* validate.sh,
+# scripts/regen-agent-catalog.sh (version-matched with validate.sh's
+# check_agent_catalog delegation — #28), and rulesets/ onto the fixture
+# immediately after cloning (see "Overlay" below)
 # so it always tests the CURRENT gate logic on disk. Once these changes are
 # committed, `git clone --local` already carries them and the overlay copy
 # is a byte-identical no-op — this step never needs to be removed.
@@ -87,7 +89,7 @@
 #
 # Usage: bash tests/validate/run-tests.sh
 #
-# Cases (17 total, including the precondition):
+# Cases (23 total, including the precondition):
 #   1.  clean baseline                          -> precondition (must PASS)
 #   2.  agent missing `tools:` frontmatter       -> check_agent
 #   3.  agent missing disable-model-invocation   -> check_agent
@@ -115,6 +117,17 @@
 #   17. shellcheck absent from PATH               -> check_shellcheck
 #       (guarded: real shellcheck must be            (WARN, not SKIP)
 #       present on the host to prove removal)
+#   18. rule missing its Enforcement line         -> check_enforcement_line
+#       (ERROR — #23, ADR-084)
+#   19. Enforcement mechanism off-vocabulary      -> check_enforcement_line
+#       (WARN, exit 0)
+#   20. agent with mcp-servers frontmatter key    -> check_agent (#25)
+#   21. routing catalog table reintroduced        -> check_agent_catalog
+#       (ADR-085 mirror-retirement guard, #28)
+#   22. AGENTS.md catalog header mangled          -> check_agent_catalog
+#       (loud zero-row extraction failure, #28)
+#   23. README Current Agents header mangled      -> check_agent_catalog
+#       (loud zero-row extraction failure, #28)
 
 if (( ${BASH_VERSINFO[0]:-0} < 4 )); then
   echo "ERROR [env] tests/validate/run-tests.sh requires bash 4.0 or later (found ${BASH_VERSION:-unknown}) — it drives validate.sh, which has the same floor (declare -A)" >&2
@@ -208,14 +221,20 @@ CLEAN_PATH="$CLEAN_BIN"
 # modified tracked file, so without the re-apply it would silently regress
 # validate.sh back to the stale committed-HEAD version on every reset.
 OVERLAY_SRC="$WORK/overlay-src"
-mkdir -p "$OVERLAY_SRC"
+mkdir -p "$OVERLAY_SRC/scripts"
 cp "$REPO_ROOT/$VALIDATE_REL" "$OVERLAY_SRC/$VALIDATE_REL"
+# scripts/regen-agent-catalog.sh joined the overlay set with #28 (validate.sh
+# delegates check_agent_catalog to it, so the two must be version-matched for
+# the catalog cases to exercise the CURRENT gate logic). Tracked like
+# validate.sh: `git checkout -- .` reverts it, so apply_overlay re-copies it.
+cp "$REPO_ROOT/scripts/regen-agent-catalog.sh" "$OVERLAY_SRC/scripts/regen-agent-catalog.sh"
 if [[ -d "$REPO_ROOT/rulesets" ]]; then
   cp -R "$REPO_ROOT/rulesets" "$OVERLAY_SRC/rulesets"
 fi
 
 apply_overlay() {
   cp "$OVERLAY_SRC/$VALIDATE_REL" "$FIXTURE/$VALIDATE_REL"
+  cp "$OVERLAY_SRC/scripts/regen-agent-catalog.sh" "$FIXTURE/scripts/regen-agent-catalog.sh"
   rm -rf "$FIXTURE/rulesets"
   if [[ -d "$OVERLAY_SRC/rulesets" ]]; then
     cp -R "$OVERLAY_SRC/rulesets" "$FIXTURE/rulesets"
@@ -654,6 +673,108 @@ case_shellcheck_absent_from_path() {
     "WARN  [shellcheck] shellcheck not installed — lint skipped locally but ENFORCED in CI"
 }
 
+# --- Case 18: check_enforcement_line — rule missing the Enforcement line ---
+# shellcheck disable=SC2329  # invoked indirectly via the CASES registry
+case_enforcement_line_missing() {
+  local f="rules/plan-before-code.md"
+  sed -i.bak '/^\*\*Enforcement:\*\*/d' "$FIXTURE/$f" && rm -f "$FIXTURE/$f.bak"
+  run_validate
+  assert_case "check_enforcement_line-missing" 1 \
+    "ERROR [enforcement] rules/plan-before-code.md: no '**Enforcement:**' line within 5 lines after the H1 (ADR-084)"
+  reset_fixture
+}
+
+# --- Case 19: check_enforcement_line — off-vocabulary mechanism -> WARN ---
+# shellcheck disable=SC2329  # invoked indirectly via the CASES registry
+case_enforcement_line_vocab_warn() {
+  local f="rules/plan-before-code.md"
+  sed -i.bak 's/^\*\*Enforcement:\*\*.*/**Enforcement:** carrier pigeon audit/' "$FIXTURE/$f" && rm -f "$FIXTURE/$f.bak"
+  run_validate
+  assert_case "check_enforcement_line-vocab-warn" 0 \
+    "WARN  [enforcement] rules/plan-before-code.md: Enforcement mechanism outside the documented vocabulary" \
+    "carrier pigeon audit"
+  reset_fixture
+}
+
+# --- Case 20: check_agent — mcp-servers frontmatter key prohibited ---
+# shellcheck disable=SC2329  # invoked indirectly via the CASES registry
+case_agent_mcp_servers() {
+  local f="agents/zz-test-agent3.md"
+  cat > "$FIXTURE/$f" <<'AGENT'
+---
+name: zz-test-agent3
+description: Harness-only fixture agent exercising check_agent's no-mcp-servers frontmatter scan. Never a real catalog entry.
+model: sonnet
+tools: Read
+disable-model-invocation: true
+mcp-servers:
+  - zz-fake-mcp-server
+---
+
+# zz-test-agent3 (test fixture)
+
+This file exists only inside the validate.sh regression harness fixture. It
+intentionally carries an `mcp-servers:` frontmatter key in YAML-list form —
+the bare-key form an FM-array emptiness test would miss — to exercise the
+rules/no-mcp-servers.md frontmatter scan (#25). Padding text keeps the body
+at or above the 200-character minimum body-length check.
+AGENT
+  run_validate
+  assert_case "check_agent-mcp-servers" 1 \
+    "ERROR [zz-test-agent3] agent: 'mcp-servers'/'mcpServers' frontmatter is prohibited (rules/no-mcp-servers.md, ADR-002)"
+  reset_fixture "$f"
+}
+
+# --- Case 21: check_agent_catalog — routing catalog table reintroduced ---
+# The only Domain-column drift possible post-ADR-085 (the generated mirror was
+# retired; AGENTS.md is the single Domain source of truth) is the mirror table
+# being reintroduced into rules/agent-first-selection.md — see issue #28's
+# scope comment.
+# shellcheck disable=SC2329  # invoked indirectly via the CASES registry
+case_routing_table_reintroduced() {
+  local f="rules/agent-first-selection.md"
+  cat >> "$FIXTURE/$f" <<'TABLE'
+
+| Agent | Domain | Use when |
+| --- | --- | --- |
+| `zz-fake` | Fake domain | Never — harness fixture row |
+TABLE
+  run_validate
+  assert_case "check_agent_catalog-table-reintroduced" 1 \
+    "catalog table reintroduced in agent-first-selection.md" \
+    "ERROR [catalog] Agent catalog drift"
+  reset_fixture
+}
+
+# --- Case 22: check_agent_catalog — AGENTS.md table header mangled ---
+# Locks the loud-failure guard: a drifted header must produce one clear
+# "no agent rows parsed" ERROR, not a silent zero-row extraction.
+# shellcheck disable=SC2329  # invoked indirectly via the CASES registry
+case_catalog_header_mangled() {
+  sed -i.bak 's/^| Agent | Tier | Domain | Use when |$/| Agent  | Tier | Domain | Use when |/' \
+    "$FIXTURE/AGENTS.md" && rm -f "$FIXTURE/AGENTS.md.bak"
+  run_validate
+  assert_case "check_agent_catalog-header-mangled" 1 \
+    "no agent rows parsed from AGENTS.md" \
+    "ERROR [catalog] Agent catalog drift"
+  reset_fixture
+}
+
+# --- Case 23: check_agent_catalog — README Current Agents header mangled ---
+# Locks the #28 README-side guard: before it, a drifted README header made the
+# Tier/Model drift scan silently report nothing (indistinguishable from
+# "checked, no drift").
+# shellcheck disable=SC2329  # invoked indirectly via the CASES registry
+case_readme_header_mangled() {
+  sed -i.bak 's/^| Agent | Model | Tier | Description |$/| Agent  | Model | Tier | Description |/' \
+    "$FIXTURE/README.md" && rm -f "$FIXTURE/README.md.bak"
+  run_validate
+  assert_case "check_agent_catalog-readme-header-mangled" 1 \
+    "no rows parsed from README 'Current Agents' table" \
+    "ERROR [catalog] Agent catalog drift"
+  reset_fixture
+}
+
 # --- Case registry (name:function), run in order after the precondition ---
 CASES=(
   "check_agent-missing-tools:case_missing_tools_field"
@@ -672,6 +793,12 @@ CASES=(
   "check_ruleset_job_drift-dir-absent:case_ruleset_dir_absent"
   "check_ruleset_job_drift-unrequired-warn:case_ruleset_unrequired_job_warns"
   "check_shellcheck-absent-warn:case_shellcheck_absent_from_path"
+  "check_enforcement_line-missing:case_enforcement_line_missing"
+  "check_enforcement_line-vocab-warn:case_enforcement_line_vocab_warn"
+  "check_agent-mcp-servers:case_agent_mcp_servers"
+  "check_agent_catalog-table-reintroduced:case_routing_table_reintroduced"
+  "check_agent_catalog-header-mangled:case_catalog_header_mangled"
+  "check_agent_catalog-readme-header-mangled:case_readme_header_mangled"
 )
 TOTAL_CASES=$((${#CASES[@]} + 1))
 

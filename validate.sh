@@ -194,7 +194,19 @@ check_agent() {
     fi
   fi
 
-  # 7. Body must carry the expertise inline (monolithic — ADR-074)
+  # 7. No MCP server wiring — an 'mcp-servers'/'mcpServers' frontmatter key is
+  #    prohibited (rules/no-mcp-servers.md, ADR-002; closes #25). Grep the raw
+  #    frontmatter block rather than FM[]: parse_frontmatter stores "" for a
+  #    bare `mcp-servers:` key whose value is a YAML list on following lines,
+  #    so an FM emptiness test would miss exactly the form the policy targets.
+  local fm_raw
+  fm_raw="$(awk '/^---[[:space:]]*$/{c++; next} c==1' "$file")"
+  if printf '%s\n' "$fm_raw" | grep -qE '^[[:space:]]*(mcp-servers|mcpServers):'; then
+    error "$name" "agent: 'mcp-servers'/'mcpServers' frontmatter is prohibited (rules/no-mcp-servers.md, ADR-002)"
+    had_error=1
+  fi
+
+  # 8. Body must carry the expertise inline (monolithic — ADR-074)
   local body
   body="$(get_body_after_frontmatter "$file")"
   if [[ ${#body} -lt 200 ]]; then
@@ -231,6 +243,49 @@ get_body_after_frontmatter() {
   done < "$file"
 
   echo "$body"
+}
+
+# --- Check rule Enforcement lines (#23, ADR-084) ---
+# Every rules/*.md must carry a '**Enforcement:**' line within the first 5
+# lines after its H1 (the named-mechanism convention from ADR-084; vocabulary
+# documented in CONTRIBUTING.md's Rules frontmatter reference). The mechanism
+# vocabulary check is WARN, not ERROR: compound `;`-joined lines and
+# parenthetical caveats are legitimate, and a genuinely new mechanism token
+# should not hard-block validation on a taxonomy gap (same posture as
+# check_readme_catalog's drift warnings). Presence is ERROR — a rule shipped
+# without the line is exactly the silent gap #23 closes.
+check_enforcement_line() {
+  local rules_dir="$DOTFILES_DIR/rules"
+  if [[ ! -d "$rules_dir" ]]; then
+    skip "enforcement" "rules/ not present — nothing to check"
+    return
+  fi
+  local vocab_re='PreToolUse hook|pre-commit hook|pre-push hook|validate\.sh|CI [A-Za-z0-9._-]+\.ya?ml|GitHub Ruleset|self-report only'
+  local checked=0 missing=0 f rel hit mech
+  for f in "$rules_dir"/*.md; do
+    [[ -f "$f" ]] || continue
+    checked=$((checked + 1))
+    rel="${f#"$DOTFILES_DIR"/}"
+    hit="$(awk '
+      h1==0 && /^# / { h1=NR; next }
+      h1>0 && NR<=h1+5 && /^\*\*Enforcement:\*\*/ { print; exit }
+      h1>0 && NR>h1+5 { exit }
+    ' "$f")"
+    if [[ -z "$hit" ]]; then
+      error "enforcement" "$rel: no '**Enforcement:**' line within 5 lines after the H1 (ADR-084)"
+      missing=$((missing + 1))
+      continue
+    fi
+    mech="${hit#\*\*Enforcement:\*\*}"
+    if [[ ! "$mech" =~ $vocab_re ]]; then
+      warn "enforcement" "$rel: Enforcement mechanism outside the documented vocabulary:${mech}"
+    fi
+  done
+  if [[ $checked -eq 0 ]]; then
+    warn "enforcement" "no rule files found under rules/"
+  elif [[ $missing -eq 0 ]]; then
+    ok "enforcement" "$checked rule(s) carry an Enforcement line"
+  fi
 }
 
 # --- Valid ADR status values ---
@@ -1315,6 +1370,11 @@ main() {
   # ADRs
   echo "ADRs:"
   check_adrs
+  echo ""
+
+  # Rule Enforcement lines
+  echo "Enforcement Lines:"
+  check_enforcement_line
   echo ""
 
   # Hooks

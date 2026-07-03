@@ -66,23 +66,34 @@ trap 'rm -rf "$WORK"' EXIT
 # --- Markdown table helpers -------------------------------------------------
 
 # Emit the data rows of the table whose header line is the literal prefix $2.
+# Row collection ends at the first line that is not a `|`-prefixed table row
+# (#28) — terminating only on blank/`#` lines silently consumed trailing
+# prose as spurious data rows when a table was not followed by a blank line.
 extract_body() {
   awk -v h="$2" '
     index($0,h)==1         { st=1; next }
     st==1 && /^\|[[:space:]]*-/ { st=2; next }
-    st==2 && (/^[[:space:]]*$/ || /^#/) { exit }
+    st==2 && $0 !~ /^\|/   { exit }
     st==2                  { print }
   ' "$1"
 }
 
 # Read raw table rows on stdin; emit tab-separated trimmed cells (backticks
 # preserved). A leading/trailing pipe yields empty edge fields, dropped here.
+# GFM-escaped pipes (\|) inside a cell are protected from the field split and
+# restored as literal pipes in the emitted cell (#28).
 cells_tsv() {
-  awk -F'|' '
+  awk '
     function trim(s){ sub(/^[ \t\r]+/,"",s); sub(/[ \t\r]+$/,"",s); return s }
     {
+      line=$0
+      gsub(/\\\|/, "\001", line)
+      n=split(line, f, "|")
       out=""
-      for (i=2; i<NF; i++) out = out (i>2 ? "\t" : "") trim($i)
+      for (i=2; i<n; i++) {
+        c=trim(f[i]); gsub(/\001/, "|", c)
+        out = out (i>2 ? "\t" : "") c
+      }
       print out
     }'
 }
@@ -148,6 +159,13 @@ if [ -f "$README_MD" ]; then
   readme_tsv="$WORK/readme.tsv"   # name <tab> model <tab> tier
   extract_body "$README_MD" '| Agent | Model | Tier | Description |' | cells_tsv \
     | awk -F'\t' '{ n=$1; gsub(/`/,"",n); print n "\t" $2 "\t" $3 }' > "$readme_tsv"
+  # Loud empty-extraction guard (#28): a drifted/reformatted README header
+  # yields zero rows here, and the drift awk below would then report zero
+  # findings — indistinguishable from "checked, no drift". Same failure class
+  # the CANON guard above already covers for AGENTS.md.
+  if [ ! -s "$readme_tsv" ]; then
+    err "catalog" "no rows parsed from README 'Current Agents' table — check the '| Agent | Model | Tier | Description |' header (README Tier/Model drift check skipped)"
+  else
   awk -F'\t' -v canon="$CANON" -v models="$WORK/wrapper.models" '
     BEGIN{
       while ((getline l < canon)>0){ split(l,a,"\t"); ctier[a[1]]=a[2]; cseen[a[1]]=1 } close(canon)
@@ -165,6 +183,7 @@ if [ -f "$README_MD" ]; then
   while IFS= read -r msg; do
     [ -n "$msg" ] && err "catalog" "$msg"
   done < "$WORK/readme.drift.sorted"
+  fi
 else
   warn "catalog" "README.md not found — skipping README Tier/Model checks"
 fi
