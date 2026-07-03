@@ -725,6 +725,23 @@ AGENT
   reset_fixture "$f"
 }
 
+# --- Case: check_no_mcp_prose — concrete MCP package reference in a rule body ---
+# Exercises the WARN-level prose heuristic (#37): a concrete package-name
+# shape ('@modelcontextprotocol/' scope or 'mcp-server-<name>') in distributed
+# prose warns without failing the run. The clean baseline doubles as the
+# no-false-positive proof: rules/no-mcp-servers.md and every 'mcp-servers'
+# frontmatter-key mention pass the same scan with zero findings.
+# shellcheck disable=SC2329  # invoked indirectly via the CASES registry
+case_mcp_prose_reference() {
+  local f="rules/plan-before-code.md"
+  printf '\nInstall @modelcontextprotocol/server-filesystem or mcp-server-git to proceed.\n' >> "$FIXTURE/$f"
+  run_validate
+  assert_case "check_no_mcp_prose-package-warn" 0 \
+    "WARN  [mcp-prose] rules/plan-before-code.md:" \
+    "concrete MCP package reference in distributed prose (rules/no-mcp-servers.md, ADR-002)"
+  reset_fixture "$f"
+}
+
 # --- Case 21: check_agent_catalog — routing catalog table reintroduced ---
 # The only Domain-column drift possible post-ADR-085 (the generated mirror was
 # retired; AGENTS.md is the single Domain source of truth) is the mirror table
@@ -796,6 +813,7 @@ CASES=(
   "check_enforcement_line-missing:case_enforcement_line_missing"
   "check_enforcement_line-vocab-warn:case_enforcement_line_vocab_warn"
   "check_agent-mcp-servers:case_agent_mcp_servers"
+  "check_no_mcp_prose-package-warn:case_mcp_prose_reference"
   "check_agent_catalog-table-reintroduced:case_routing_table_reintroduced"
   "check_agent_catalog-header-mangled:case_catalog_header_mangled"
   "check_agent_catalog-readme-header-mangled:case_readme_header_mangled"
