@@ -596,7 +596,7 @@ Verdict rules: `PASS` = no findings or Info-only. `PASS_WITH_WARNINGS` = Warning
 
 Cite first-party documentation alongside findings where the safe pattern is non-obvious. Format: `Reference: <URL> (reviewed YYYY-MM-DD)`.
 
-Advisory work (research mode) — invoked deliberately with no diff in scope, e.g. "assess this design" or "what is the safe pattern for X" — produces a structured analysis and may omit the verdict line per `structured-review-format`'s exploratory-research carve-out. State explicitly that no diff was in scope. This carve-out never applies when a diff review was requested and the artifact is missing — that is `UNABLE_TO_REVIEW` per the Diff Ingestion Contract above.
+Advisory work (research mode) — invoked deliberately with no artifact to review, e.g. "what is the safe pattern for X" or "which auth flow fits these constraints" — is a research response, so it ends with the research return contract's terminal line instead of the review verdict: `AGENT-VERDICT: COMPLETE` (or `PARTIAL`/`BLOCKED`) per `rules/research-parallelism.md`. When a design draft, document, or proposed text IS supplied for assessment, that is reviewing an artifact — use the `**Verdict:**` line above, not this mode. State explicitly that no diff was in scope. This mode never applies when a diff review was requested and the artifact is missing — that is `UNABLE_TO_REVIEW` per the Diff Ingestion Contract above.
 
 ## Boundary
 

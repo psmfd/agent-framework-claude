@@ -56,6 +56,14 @@ Signal is hybrid: a local-only (gitignored) `<repo>/.gh-expected-identity` pin (
 
 The git pre-push hook is the first **git-only** hook category in this repo: unlike the Claude Code `PreToolUse` hooks, it has no `settings.json` entry. `validate.sh check_hooks` verifies the git-only scripts (`secrets-guard.sh`, `gh-identity-guard.sh`) exist and are executable.
 
+#### Global Subagent Verdict Guard
+
+The `subagent-verdict-guard.sh` hook is a global `SubagentStop` guard registered in `settings.json` (no matcher — scoping happens in-hook). When a framework custom agent finishes without its machine-parseable verdict line, the hook blocks the stop (exit 2) and the block reason is delivered to the subagent as its next instruction, forcing it to append the line — mechanical enforcement of the return contract in `rules/research-parallelism.md` and `rules/structured-review-format.md` (phase 1 of #24; ADR-088).
+
+Scoping is dynamic: enforcement applies only when the payload's `agent_type` resolves to a file in `~/.claude/agents/` — the agents symlink IS the allowlist, so catalog changes need no hook edit. Built-ins (`general-purpose`, `Explore`, `Plan`, …) and unknown types always pass. Detection accepts either verdict grammar (terminal `AGENT-VERDICT:` line, or a `**Verdict:**` line outside fenced code blocks), so a review agent doing advisory research work is never false-blocked.
+
+Unlike the `PreToolUse` guards, this hook fails **OPEN** on indeterminate state (missing `jq`, absent `last_assistant_message`) — a deliberate ADR-057 inversion, because "block" here forces the subagent to keep running rather than denying one retryable action. Loop safety: `stop_hook_active: true` allows unconditionally (at most one forced retry per stop cycle); the orchestrator's fail-closed consumer defaults (missing verdict → `PARTIAL`/`NEEDS_CHANGES`) remain the backstop everywhere the hook does not fire. Override: `SKIP_SUBAGENT_VERDICT_GUARD=1` (announced). See ADR-088.
+
 #### Inline Agent-Level Hooks
 
 Agent files can define hooks directly in their frontmatter using the `hooks:` field. These hooks are scoped to that specific agent and fire after global hooks. They are not configured in `settings.json`.
@@ -164,7 +172,7 @@ paths:
 
 Rules without `paths` apply universally.
 
-Every rule body carries an `**Enforcement:**` line immediately after its `# Title` (before the first paragraph), stating what mechanism — if any — actually gates the behavior the rule describes: `PreToolUse hook <name>`, `pre-commit hook <name>`, `pre-push hook <name>`, `validate.sh <check>`, `CI <workflow>.yml`, `GitHub Ruleset <name>`, or `self-report only`. List multiple mechanisms with `; ` when more than one applies. `self-report only` documents current enforcement reality — it does not diminish the rule's mandatory status. A rule with no automated check is exactly the kind of rule where the self-review diligence in `post-implementation-review.md` matters most. See ADR-084.
+Every rule body carries an `**Enforcement:**` line immediately after its `# Title` (before the first paragraph), stating what mechanism — if any — actually gates the behavior the rule describes: `PreToolUse hook <name>`, `SubagentStop hook <name>`, `pre-commit hook <name>`, `pre-push hook <name>`, `validate.sh <check>`, `CI <workflow>.yml`, `GitHub Ruleset <name>`, or `self-report only`. List multiple mechanisms with `; ` when more than one applies. `self-report only` documents current enforcement reality — it does not diminish the rule's mandatory status. A rule with no automated check is exactly the kind of rule where the self-review diligence in `post-implementation-review.md` matters most. See ADR-084.
 
 ## PR Review
 

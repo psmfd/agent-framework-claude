@@ -109,6 +109,7 @@ agent-framework-claude/
 │   ├── secrets-guard/     # hooks/secrets-guard.sh — staged-blob bypass tests (ADR-059)
 │   ├── session-gh-identity-guard/ # hooks/session-gh-identity-guard.sh — PreToolUse JSON contract
 │   ├── session-secrets-guard/     # hooks/session-secrets-guard.sh — PreToolUse JSON contract (ADR-053)
+│   ├── subagent-verdict-guard/    # hooks/subagent-verdict-guard.sh — SubagentStop verdict contract (ADR-088)
 │   ├── validate/          # Clone-and-mutate regression harness for validate.sh (bash 4+; ADR-083)
 │   ├── wim/               # End-to-end tests for scripts/wim/ (stateful az/gh CLI shims)
 │   └── worktree-guard/    # hooks/worktree-create.sh — symlink containment (ADR-070)
@@ -147,6 +148,7 @@ agent-framework-claude/
 │   ├── session-gh-identity-guard.sh
 │   ├── session-secrets-guard.sh
 │   ├── stop-preflight-check.sh
+│   ├── subagent-verdict-guard.sh
 │   ├── worktree-create.sh
 │   └── worktree-remove.sh
 ├── rules/                 # Claude Code user-level behavioral rules
@@ -292,6 +294,7 @@ Hooks are shell scripts that run in response to Claude Code session events, prov
 | `session-gh-identity-guard.sh` | `PreToolUse` | Denies mutating `gh`/`git push` ops when the active GitHub identity is wrong |
 | `gh-identity-guard.sh` | git `pre-push` | Blocks pushes from the wrong GitHub account (raw terminal/IDE vector) |
 | `stop-preflight-check.sh` | `Stop` | Runs a description prompt before the session ends |
+| `subagent-verdict-guard.sh` | `SubagentStop` | Blocks a framework custom agent returning without its verdict line (ADR-088) |
 | `worktree-create.sh` | `PostToolUse` | Enforces symlink containment on worktree creation (ADR-070) |
 | `worktree-remove.sh` | `PostToolUse` | Cleans up worktrees after removal |
 
