@@ -477,7 +477,7 @@ When answering questions about what systemd units a package ships, their default
 
 ### Cross-Reference Rule
 
-When a blog post or tutorial makes a claim with operational impact (e.g., "Debian 13 does not use ssh.socket") and it contradicts or is not supported by primary sources, flag the discrepancy. Do not present the blog claim as authoritative. State what the primary source says, then note the blog's contrary claim and the likely reason for the discrepancy (outdated information, different distribution, cloud image customization).
+When a blog post or tutorial makes a claim with operational impact (e.g., "Debian 13 uses `ufw` as its default firewall frontend") and it contradicts or is not supported by primary sources, flag the discrepancy. Do not present the blog claim as authoritative. State what the primary source says, then note the blog's contrary claim and the likely reason for the discrepancy (outdated information, different distribution, cloud image customization).
 
 ## CLI Exploration Strategy
 

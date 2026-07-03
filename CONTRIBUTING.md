@@ -89,7 +89,7 @@ Use `scripts/scaffold.sh agent <name>` to create `agents/<name>.md` from the tem
 
 1. Fill in the agent's expertise, tool list, model, and all behavioral guidance in the scaffolded `agents/<name>.md`.
 
-2. Add a catalog row to `AGENTS.md`, a table row to the README "Current Agents" section, a routing row in `rules/agent-first-selection.md`, and a row in the `web/instructions.md` Agent Catalog table.
+2. Add a catalog row to `AGENTS.md` (the canonical catalog — `rules/agent-first-selection.md` carries only a pointer, ADR-085), a table row to the README "Current Agents" section, and a row in the `web/instructions.md` Agent Catalog table.
 
 3. Update the README directory tree — add `agents/<name>.md` and any files added to `hooks/`, `scripts/`, `templates/`, or `adrs/`.
 
@@ -105,7 +105,7 @@ Use `scripts/scaffold.sh agent <name>` to create `agents/<name>.md` from the tem
 
 Use `scripts/scaffold.sh rule <name>` to create `rules/<name>.md` from the template. Then:
 
-1. Fill in the rule's behavioral guidance in the scaffolded `rules/<name>.md`.
+1. Fill in the rule's behavioral guidance in the scaffolded `rules/<name>.md`, including the `**Enforcement:**` line (see the Rules frontmatter section below for the format and vocabulary).
 
 2. Update README.md — add an H3 entry to "Current Rules" and add `rules/<name>.md` to the README directory tree (not checked by `validate.sh` — hand-verify).
 
@@ -163,6 +163,8 @@ paths:
 | `paths` | Optional | YAML list of glob patterns |
 
 Rules without `paths` apply universally.
+
+Every rule body carries an `**Enforcement:**` line immediately after its `# Title` (before the first paragraph), stating what mechanism — if any — actually gates the behavior the rule describes: `PreToolUse hook <name>`, `pre-commit hook <name>`, `pre-push hook <name>`, `validate.sh <check>`, `CI <workflow>.yml`, `GitHub Ruleset <name>`, or `self-report only`. List multiple mechanisms with `; ` when more than one applies. `self-report only` documents current enforcement reality — it does not diminish the rule's mandatory status. A rule with no automated check is exactly the kind of rule where the self-review diligence in `post-implementation-review.md` matters most. See ADR-084.
 
 ## PR Review
 
@@ -244,8 +246,10 @@ The script checks:
 - Names match between filenames and `name:` frontmatter fields
 - `disable-model-invocation: true` is present on all agent files
 - Execution-tool policy — `Bash` only on agents in `CLAUDE_BASH_ALLOWED` (ADR-069)
+- No `mcp-servers`/`mcpServers` key in agent frontmatter (errors — the raw frontmatter block is scanned so the YAML-list form is caught; `rules/no-mcp-servers.md`, ADR-002, #25)
+- Every `rules/*.md` carries an `**Enforcement:**` line within 5 lines after its H1 (errors when missing; warns when the mechanism token falls outside the vocabulary documented in the Rules frontmatter reference above — #23, ADR-084)
 - Symlinks from `~/.claude/` point to the correct targets
-- Agent catalog drift (via `scripts/regen-agent-catalog.sh --check`, ADR-062): `AGENTS.md` is canonical — name presence vs `agents/*.md` (bidirectional), Domain/Use-when parity across `AGENTS.md` and the routing mirror (`rules/agent-first-selection.md`), and README Tier vs `AGENTS.md` / README Model vs agent `model:` frontmatter; content drift is an error (fix mirrors with `--write`)
+- Agent catalog drift (via `scripts/regen-agent-catalog.sh --check`, ADR-062/ADR-085): `AGENTS.md` is canonical — name presence vs `agents/*.md` (bidirectional), `rules/agent-first-selection.md` carries the AGENTS.md pointer and no reintroduced table copy, and README Tier vs `AGENTS.md` / README Model vs agent `model:` frontmatter; drift is an error (fix `AGENTS.md`/README by hand). Both table extractions fail loudly on a drifted/reformatted header instead of silently parsing zero rows (#28)
 - Agent delegation references resolve to real agent files
 - Relative markdown links in all `.md` files resolve to existing targets (superseded ADRs are exempt — their bodies are frozen per the supersession-not-editing rule and may reference files removed by the superseding ADR)
 - Markdown documentation standards (no H5+ headings, no language-less code fences)
@@ -254,8 +258,10 @@ The script checks:
 - `web/instructions.md` distillate stays in sync with sources (warns on drift) — every agent on disk must appear as a row in the Agent Catalog table; changes to `AGENTS.md`, `rules/agent-first-selection.md`, or any mirrored rule (orchestrator-protocol, plan-before-code, agent-first-selection, research-parallelism, consensus-by-replication, github-flow, conventional-commits, semver-tagging, pr-template-standard, adr-required, debian-baseline, post-implementation-review, structured-review-format, no-mcp-servers, secrets-guard, gh-identity-guard, script-output-conventions) without a corresponding `web/instructions.md` change emit a WARN. Override via a `Web-Sync-Skip: <reason>` Git trailer in any commit since the diff base — reason text is required and is logged loudly in the warning output. Run with `VALIDATE_VERBOSE=1 ./validate.sh` to see per-warning detail lines.
 - Frozen work-item scripts (`scripts/wim/*.sh`) match the SHA-256 pins in `scripts/wim/.frozen-shas` (errors on drift) — see ADR-050 for the rationale and the `work-item-management-expert` agent `## Frozen Work-Item Scripts` section for the agent-side constraint.
 - Active `gh` account can resolve the `origin` repository (warns on mismatch) — guards against the wrong identity on multi-account hosts. Skipped when `GH_TOKEN`/`GITHUB_TOKEN` is set or the remote is not `github.com`. See ADR-052/ADR-054 and `docs/multi-account-git-identity.md`.
-- Hook and shared-lib scripts pass `shellcheck` (`hooks/*.sh` and `scripts/lib/*.sh`) — security-critical guards and sourced helpers must be statically clean; findings are errors (resolve a genuine false positive with a reviewed inline `# shellcheck disable=SCxxxx`). Skipped (non-fatal) when `shellcheck` is not installed.
+- Hook and shared-lib scripts pass `shellcheck` (`hooks/*.sh` and `scripts/lib/*.sh`) — security-critical guards and sourced helpers must be statically clean; findings are errors (resolve a genuine false positive with a reviewed inline `# shellcheck disable=SCxxxx`). When `shellcheck` is not installed locally the check WARNS (not a silent skip) — CI enforces it authoritatively, so install shellcheck locally (`brew install shellcheck` / `apt install shellcheck`) to keep pre-push predictive of CI.
 - Shared-lib self-tests pass (`scripts/lib/*.sh --self-test`) — each sourced helper module is run as a subprocess and must exit 0; a failure is an error. Skipped when `scripts/lib/` is absent or empty. See ADR-061.
+- Hook-pair lockstep (errors on drift) — the deliberately duplicated `SECRET_PATTERNS` (secrets-guard pair) and identity-helper functions (`sanitize`, `is_valid_login`, `parse_owner_repo`, `GH_LOGIN_RE`; gh-identity pair) must stay byte-identical across their two hooks. The extractor errors loudly when a target is not found in its expected shape rather than silently passing. See ADR-083.
+- Ruleset required-check drift (errors) — every `required_status_checks` context in `rulesets/*.json` must match a workflow job's effective check name (`name:` field, else job id); a renamed/removed job would otherwise become a never-reporting required check that blocks every merge. Fully offline; the live-vs-committed diff is `scripts/rulesets.sh --check` (skips gracefully without network/auth). Intentionally-unrequired jobs are allowlisted inside the check. See ADR-086.
 
 ## Documentation Sync Map
 
@@ -271,16 +277,17 @@ When changing one file in a pair, the partner must be updated in the same commit
 | `README.md` (directory tree) | actual files on disk | Tree listing must reflect actual `hooks/`, `scripts/`, `templates/`, `adrs/` contents |
 | `commands/*.md` | `setup.sh` (`CLAUDE_LINKS`) + `validate.sh` (`check_symlinks` pairs) | A new command artifact type must be symlinked into `~/.claude/commands/` and registered in the symlink-pair check |
 | `AGENTS.md` (agent table) | `agents/` directory | Bidirectional name presence — checked by `check_agent_catalog()` (delegates to `scripts/regen-agent-catalog.sh --check`, ADR-062) |
-| `AGENTS.md` (Tier/Domain/Use-when) | `rules/agent-first-selection.md` | `AGENTS.md` canonical; regenerate mirror with `scripts/regen-agent-catalog.sh --write`; `--check` gates Domain/Use-when drift (error). README Tier/Model also checked; README Description + web catalog intentionally divergent (ADR-062) |
+| `AGENTS.md` (Tier/Domain/Use-when) | `rules/agent-first-selection.md` (pointer only) | `AGENTS.md` canonical; the rule carries a pointer, not a copy (ADR-085) — `--check` errors if a table is reintroduced there. README Tier/Model also checked; README Description + web catalog intentionally divergent (ADR-062) |
 | `AGENTS.md` (Validation) | `validate.sh` check list | Narrative description must reflect current checks |
+| `rulesets/*.json` | Live GitHub rulesets + `.github/workflows/*.yml` job names | Committed desired state (ADR-086) — live drift via `scripts/rulesets.sh --check`; job-name cross-check via `validate.sh check_ruleset_job_drift`; resync intentional UI edits with `--pull` |
 | `CONTRIBUTING.md` (Validation) | `validate.sh` check list | New checks must be documented; removed checks must be de-listed |
 | `CONTRIBUTING.md` (Adding a New Agent) | `.github/PULL_REQUEST_TEMPLATE.md` | Step list and PR checklist must cover the same required actions |
 | `CONTRIBUTING.md` (Adding a New Rule) | `.github/PULL_REQUEST_TEMPLATE.md` | Same as above for rules |
 | `scripts/wim/<script>.sh` | `scripts/wim/.frozen-shas` | Frozen scripts under `scripts/wim/` are SHA-pinned. Any legitimate re-authoring must update the corresponding pin entry in the same commit, or `validate.sh check_frozen_scripts` errors. See ADR-050. |
 | `scripts/wim/` (any change) | `agents/work-item-management-expert.md` `## Frozen Work-Item Scripts` and `## Script Workflow` sections | Adding or removing a frozen script, renaming the manifest file, or changing the driver's invocation contract must propagate to the agent file so the constraint and operational flow stay accurate. |
-| `AGENTS.md` (agent table) and matching row in `rules/agent-first-selection.md` | `web/instructions.md` (Agent Catalog table) | Catalog row edits (description, domain, use-when text) propagate so web-session users see the same routing reference |
+| `AGENTS.md` (agent table) | `web/instructions.md` (Agent Catalog table) | Catalog row edits (description, domain, use-when text) propagate so web-session users see the same routing reference |
 | `rules/<name>.md` (rules mirrored in the distillate — orchestrator-protocol, plan-before-code, agent-first-selection, research-parallelism, consensus-by-replication, github-flow, conventional-commits, semver-tagging, pr-template-standard, adr-required, debian-baseline, post-implementation-review, structured-review-format, no-mcp-servers, secrets-guard, gh-identity-guard, script-output-conventions) | `web/instructions.md` (matching section) | Substantive rule edits propagate to the matching section. Editorial tweaks that do not change semantics are not required to propagate. |
-| `AGENTS.md` (Orchestrator Protocol, Development Conventions, Security Policies) | `web/instructions.md` (matching section) | Material protocol or convention changes propagate |
+| `AGENTS.md` (Orchestrator Protocol, Development Conventions, Security Policies) | `rules/<name>.md` (the canonical rule each pointer names) | Pointer text only (ADR-085) — keep the pointer accurate when a rule is renamed/added/removed; substantive changes live in the rule and propagate to `web/instructions.md` via the row above |
 
 ## Setup
 

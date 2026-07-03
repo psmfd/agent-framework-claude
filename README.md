@@ -78,6 +78,9 @@ agent-framework-claude/
 │   ├── lib/               # Shared sourced shell helpers (bash-3.2 safe; ADR-061)
 │   │   ├── log.sh                # Output helpers + fatal/print_summary; --self-test
 │   │   └── git.sh                # git_repo_root; --self-test
+│   ├── check-bash32.sh    # Runs 3.2-targeted scripts under a real bash 3.2 binary (ADR-083)
+│   ├── check-pin-drift.sh # Detects stale workflow-embedded container digest pins (#15)
+│   ├── rulesets.sh        # Ruleset-as-code: --check/--apply/--pull vs rulesets/*.json (ADR-086)
 │   ├── scaffold.sh        # Scaffolds new agent or rule from templates
 │   ├── setup-repo.sh      # Repo initialization helper
 │   ├── regen-agent-catalog.sh  # Agent catalog drift gate (--check) + routing-mirror regen (--write); ADR-062
@@ -94,14 +97,21 @@ agent-framework-claude/
 ├── templates/             # Scaffolding templates
 │   ├── agent/             # Monolithic agent template
 │   └── rule/              # rule.md template
-├── tests/                 # Test suites for project tooling
-│   ├── secrets-guard/     # Acceptance tests for hooks/secrets-guard.sh (staged-blob; ADR-059)
-│   │   └── run-tests.sh           # Throwaway-repo bypass tests — exit 0 PASS, 1 FAIL
-│   ├── wim/               # End-to-end tests for scripts/wim/ (CLI shims + bash runner)
-│   │   ├── run-tests.sh           # Plain-bash harness — exit 0 PASS, 1 FAIL
-│   │   └── fixtures/bin/{az,gh}   # Stateful CLI shims used by run-tests.sh
-│   └── worktree-guard/    # Acceptance tests for hooks/worktree-create.sh (symlink containment; ADR-070)
-│       └── run-tests.sh           # Throwaway-repo bypass tests — exit 0 PASS, 1 FAIL
+├── rulesets/              # Committed branch-protection ruleset state (ADR-086)
+│   ├── protect-dev.json           # Desired state for the dev ruleset (normalized)
+│   ├── protect-main.json          # Desired state for the main ruleset (normalized)
+│   └── README.md                  # Normalization contract + workflow
+├── tests/                 # Test suites for project tooling (each suite: run-tests.sh, exit 0 PASS / 1 FAIL)
+│   ├── fixtures/bin/gh    # Deterministic gh shim shared by the identity-guard suites (ADR-083)
+│   ├── bash-destructive-guard/    # hooks/bash-destructive-guard.sh — compound/wrapper/find/safe-path cases
+│   ├── gh-identity-guard/         # hooks/gh-identity-guard.sh — pre-push identity ladder (ADR-054)
+│   ├── rulesets/          # scripts/rulesets.sh — normalization + apply-rail fixtures (ADR-086)
+│   ├── secrets-guard/     # hooks/secrets-guard.sh — staged-blob bypass tests (ADR-059)
+│   ├── session-gh-identity-guard/ # hooks/session-gh-identity-guard.sh — PreToolUse JSON contract
+│   ├── session-secrets-guard/     # hooks/session-secrets-guard.sh — PreToolUse JSON contract (ADR-053)
+│   ├── validate/          # Clone-and-mutate regression harness for validate.sh (bash 4+; ADR-083)
+│   ├── wim/               # End-to-end tests for scripts/wim/ (stateful az/gh CLI shims)
+│   └── worktree-guard/    # hooks/worktree-create.sh — symlink containment (ADR-070)
 ├── agents/                # Monolithic Claude Code agents (frontmatter + full expertise inline)
 │   ├── ansible-expert.md
 │   ├── aws-expert.md

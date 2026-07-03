@@ -4,6 +4,8 @@ description: 'Run a review pass after each task and again before opening a PR; c
 
 # Post-Implementation Review
 
+**Enforcement:** validate.sh (invoked manually as the pre-PR gate); self-report only (per-task gate)
+
 This rule defines a two-tier review gate: a **per-task gate** that runs after each work item completes, and a **pre-PR gate** that runs once before opening or updating the PR. Both apply to substantive implementation work. Trivial single-line fixes, typo corrections, and documentation-only edits are exempt.
 
 ## Per-Task Gate

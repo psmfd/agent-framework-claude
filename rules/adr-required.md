@@ -4,6 +4,8 @@ description: 'Require an ADR for significant convention or architecture changes'
 
 # ADR Required for Significant Decisions
 
+**Enforcement:** validate.sh check_adrs (numbering, status, required sections); self-report only (when-to-create judgment)
+
 When making a change that introduces, modifies, or removes a convention, pattern, or architectural decision:
 
 - **Create an ADR** in `adrs/` using the MADR minimal template (`adrs/TEMPLATE.md`).

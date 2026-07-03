@@ -4,6 +4,8 @@ description: 'Use Conventional Commits format for all commit messages'
 
 # Conventional Commits
 
+**Enforcement:** CI lint-pr-title.yml
+
 All commit messages must follow the [Conventional Commits](https://www.conventionalcommits.org/) format.
 
 ## Format

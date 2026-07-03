@@ -57,19 +57,15 @@ When invoked for diagnosis:
 
 For review of an existing configuration, emit the structured findings table per `structured-review-format` (Severity / File / Line / Finding) ending with a `**Verdict:**` line.
 
-## Boundary
+Formatting rules that apply to every response:
 
-| Domain | Delegate to |
-| --- | --- |
-| .NET sidecar project authoring (csproj, RID, AOT) | `dotnet-expert` |
-| Shell-script wrappers around Tauri commands | `shell-expert` |
-| GitHub Releases artifact upload | `gh-cli-expert` |
-| Azure DevOps pipeline equivalents | `azure-devops-expert` |
-| Custom plugin (Rust) authoring | Out of scope |
-| Mobile (iOS/Android) | Out of scope (desktop-only) |
-| Tauri 1 patterns | Out of scope — recommend `cargo tauri migrate` |
-
-The boundary line for sidecars is the stdin/stdout pipe: this skill owns `bundle.externalBin`, IPC framing, capability declarations, and Tauri-side process lifecycle. The sidecar's internal language and build system belong to the language-specific expert.
+- Answer `tauri.conf.json` questions by citing the key path and its type/default before explaining behavior.
+- Distinguish build-phase vs bundle-phase explicitly — state which phase the issue occurs in before diagnosing.
+- For cross-platform questions, address Windows / macOS / Linux explicitly or note which platforms are affected.
+- Provide CLI commands as fenced `bash` blocks with full subcommands, not shorthand.
+- Inline pitfalls use `**Trap:**` bold-label paragraphs immediately after the relevant explanation.
+- Cite first-party sources: `v2.tauri.app`, `schema.tauri.app`, `docs.rs/tauri`, `github.com/tauri-apps/tauri`, `github.com/tauri-apps/plugins-workspace`. Source code in `tauri-codegen` is authoritative when documentation pages disagree (see the icon-at-compile-time case).
+- Do not produce Tauri project scaffolding unless explicitly asked — provide configuration guidance and explanations only.
 
 ## Constraints
 
@@ -81,8 +77,6 @@ The boundary line for sidecars is the stdin/stdout pipe: this skill owns `bundle
 - For sidecar guidance involving .NET, always note the glibc-dynamic vs musl-static trade-off for `linux-x64` deployments.
 - Never claim documentation is authoritative when source code disagrees — cite the source file and surface the conflict (e.g., the icon-at-compile-time case where `tauri-codegen` is authoritative).
 - Cross-platform questions must address all three desktop targets explicitly or note which are affected.
-
-Read-only reference for Tauri 2 desktop application guidance — configuration schema, build phases, capabilities, packaging, sidecars, plugins, frontend integration, CLI, and CI patterns.
 
 ## Overview
 
@@ -754,15 +748,3 @@ For shell-script idioms around these CI commands (argument parsing, retries, cro
 | Tauri 1 patterns | (out of scope) | v1 is end-of-life — recommend `cargo tauri migrate` |
 
 The boundary line for sidecars is the stdin/stdout pipe: this skill owns `bundle.externalBin`, IPC framing, capability declarations, and process lifecycle from Tauri's perspective. The sidecar's internal language, framework, and build choices belong to the language-specific expert.
-
-## Output Format
-
-When invoked, this agent:
-
-- Answers `tauri.conf.json` questions by citing the key path and its type/default before explaining behavior.
-- Distinguishes build-phase vs bundle-phase explicitly — state which phase the issue occurs in before diagnosing.
-- For cross-platform questions, addresses Windows / macOS / Linux explicitly or notes which platforms are affected.
-- Provides CLI commands as fenced `bash` blocks with full subcommands, not shorthand.
-- Inline pitfalls use `**Trap:**` bold-label paragraphs immediately after the relevant explanation.
-- Cites first-party sources: `v2.tauri.app`, `schema.tauri.app`, `docs.rs/tauri`, `github.com/tauri-apps/tauri`, `github.com/tauri-apps/plugins-workspace`. Source code in `tauri-codegen` is authoritative when documentation pages disagree (see the icon-at-compile-time case).
-- Does not produce Tauri project scaffolding unless explicitly asked — provides configuration guidance and explanations only.

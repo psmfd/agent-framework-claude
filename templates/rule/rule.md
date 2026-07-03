@@ -4,6 +4,8 @@ description: 'TODO: one-line description of what this rule enforces'
 
 # {{NAME}}
 
+**Enforcement:** TODO: name the actual mechanism (PreToolUse hook / pre-commit hook / pre-push hook / validate.sh check / CI workflow / GitHub Ruleset / self-report only). Do not leave this as a TODO in a merged PR.
+
 TODO: Write the rule specification here.
 
 ## When this rule applies

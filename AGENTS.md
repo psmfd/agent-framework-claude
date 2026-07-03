@@ -26,9 +26,23 @@ This repo has no build or runtime — it is a distribution of Markdown agents/ru
 VALIDATE_VERBOSE=1 ./validate.sh   # per-warning detail lines
 
 # Bash test suites (plain-bash harnesses: exit 0 PASS, 1 FAIL)
-tests/secrets-guard/run-tests.sh   # secrets-guard.sh staged-blob regression (ADR-059)
-tests/wim/run-tests.sh             # end-to-end work-item scripts via CLI shims
-tests/worktree-guard/run-tests.sh  # worktree-create.sh symlink containment (ADR-070)
+tests/secrets-guard/run-tests.sh            # secrets-guard.sh staged-blob regression (ADR-059)
+tests/session-secrets-guard/run-tests.sh    # session-secrets-guard.sh PreToolUse contract (ADR-053)
+tests/gh-identity-guard/run-tests.sh        # gh-identity-guard.sh pre-push identity ladder (ADR-054)
+tests/session-gh-identity-guard/run-tests.sh # session-gh-identity-guard.sh PreToolUse contract
+tests/bash-destructive-guard/run-tests.sh   # bash-destructive-guard.sh command classifier
+tests/validate/run-tests.sh                 # validate.sh clone-and-mutate regression (bash 4+)
+tests/wim/run-tests.sh                      # end-to-end work-item scripts via CLI shims
+tests/worktree-guard/run-tests.sh           # worktree-create.sh symlink containment (ADR-070)
+tests/rulesets/run-tests.sh                 # scripts/rulesets.sh normalization + apply rails (ADR-086)
+
+# Bash 3.2 floor check — runs the 3.2-targeted scripts under a real 3.2 binary
+# (macOS /bin/bash); SKIPs on hosts without one. CI runs it on macOS (ADR-083).
+scripts/check-bash32.sh
+
+# Ruleset-as-code (ADR-086): live drift check / apply / seed for the committed
+# branch-protection rulesets in rulesets/*.json
+scripts/rulesets.sh --check
 
 # Shared shell-lib self-tests (also gated by validate.sh)
 scripts/lib/log.sh --self-test
@@ -92,16 +106,7 @@ Significant decisions are recorded in `adrs/` using the MADR minimal format. See
 
 ## Orchestrator Protocol
 
-You operate as an orchestrator by default. This is mandatory session-level behavior. It is not optional. It is not something you may skip because a task "seems simple." Two rules define your orchestration responsibilities — you MUST apply them as a unified protocol:
-
-1. **Agent-First Selection** — route to custom agents before general-purpose. Check EVERY agent in the catalog — tasks frequently touch multiple domains. Using a general-purpose agent when a custom agent covers the domain is a protocol violation.
-2. **Research Parallelism** — fan out to 3+ parallel agents for research tasks. Produce Agent Efficacy Reports. Fewer than 3 is a violation unless fewer than 3 relevant agents exist.
-
-**Mandatory task classification:** Before acting on ANY task, explicitly classify it as Research, Implementation, or Exempt. State the classification to the user. Silent classification is a protocol violation. If uncertain, classify UP, never down.
-
-**Session workflow:** Route (check catalog) → Delegate (brief each agent with question, context, expected output form, and the required return contract — a bounded executive summary plus the terminal verdict line) → Collect (wait for all agents) → Synthesize (combine results, produce efficacy report).
-
-**Narrow exemptions (the ONLY valid reasons to skip):** operating as a subagent, a literal single tool invocation (one specific file read or grep the user named), or direct implementation of an already-approved plan. "This seems simple," "I can handle this directly," and "this is just a quick operational task" are NOT valid exemptions.
+You operate as an orchestrator by default — mandatory, not skippable for "simple" tasks. The full protocol (task classification, agent-first routing, fan-out shapes and aggregation policy, narrow exemptions, sub-agent obligations) is defined in `rules/orchestrator-protocol.md`, `rules/agent-first-selection.md`, and `rules/research-parallelism.md`, loaded automatically every session.
 
 ## Development Conventions
 
@@ -111,100 +116,53 @@ All Markdown files must follow the conventions in [`standards/documentation.md`]
 
 ### Plan Before Code
 
-Before writing, editing, or deleting any code:
-
-- Create an implementation plan and present it to the user for review.
-- The plan must include: what files will be changed, what the changes are, and why.
-- Wait for explicit user approval before making any code modifications.
-- If the user requests changes to the plan, revise and re-present for approval.
-- Trivial clarifications or questions do not require a plan — only actions that modify code.
-- Reading, searching, and exploring code to inform the plan is always permitted without approval.
-- Sub-agent exception: when a parent agent has already received plan approval and delegates to a sub-agent, the sub-agent proceeds directly without re-presenting the plan.
+Before writing, editing, or deleting code: present an implementation plan, wait for explicit approval, then implement. Full protocol (approval workflow, revision handling, sub-agent exception) is in `rules/plan-before-code.md`.
 
 ### Post-Implementation Review
 
-After completing implementation changes, run a review pass before committing or opening a PR.
-
-- Run the linter agent on all changed files to catch style, formatting, and structural issues.
-- Verify tests pass where the project has a test suite. Do not skip failing tests.
-- Review your own changes — re-read the diff for unintended modifications, leftover debug code, or missed requirements.
-- Run `validate.sh` when changes touch agents or rules.
-- This applies after substantive implementation work, not documentation-only edits, single-line fixes, or configuration changes where no test suite exists.
+Run the linter, verify tests, self-review the diff, and run `validate.sh` after substantive implementation work — before closing the task or opening the PR. Full per-task and pre-PR gates are in `rules/post-implementation-review.md`.
 
 ### GitHub Flow
 
-All repos follow GitHub Flow: short-lived feature branches merged via PR into `dev` (the integration branch). `main` is the stable branch — code reaches `main` only via release promotion. Branch names follow `<type>/kebab-case-description` using Conventional Commits types. Squash merge for feature branches into `dev` — the PR title becomes the commit message and must be valid Conventional Commits format. Merge commit for `dev` → `main` release promotions — preserves shared SHAs to prevent branch divergence. See `rules/github-flow.md` for branch protection, lifecycle, and GitHub settings.
+Short-lived feature branches merged via PR into `dev`; `main` receives only release promotions. Branch naming, merge strategy, and branch protection are defined in `rules/github-flow.md`.
 
 ### Debian Baseline
 
-All Linux-targeting guidance assumes Debian 13 (Trixie) as the baseline distribution. Use Debian idioms for package management (`apt`), service management (`systemd`/`systemctl`), firewall (`nftables`), and APT sources (DEB822 format). Key differences from Ubuntu 24.04 are documented in the rule, including `ssh.socket` activation, nftables default, and cloud-init behavior. This applies to server/VM configuration, Ansible targeting Linux, Docker base images, and shell examples with distro-specific commands. See `rules/debian-baseline.md` for the full comparison table.
+Linux-targeting guidance (server config, Ansible, Docker base images, shell examples) assumes Debian 13 (Trixie) — `apt`, `systemd`, `nftables`, DEB822 sources. Full idioms and Ubuntu 24.04 deltas are in `rules/debian-baseline.md`.
 
 ### SemVer Tagging
 
-Release tags use Semantic Versioning with a `v` prefix (`v1.2.3`), cut from `main` as annotated tags. Version bumps follow Conventional Commits: `feat` -> MINOR, `fix`/`perf` -> PATCH, breaking changes -> MAJOR. Pre-1.0 projects start at `v0.1.0` with breaking changes bumping MINOR per SemVer spec section 4. Release automation is handled by `semantic-release` on pushes to `main` (see ADR-042). PR validation (`validate.sh`) and PR title linting run as GitHub Actions on PRs targeting `dev`. See `rules/semver-tagging.md` for the release process and container image tagging.
+Release tags use SemVer with a `v` prefix, cut from `main`. Version bumps follow the Conventional Commits type (`feat` -> MINOR, `fix`/`perf` -> PATCH, breaking -> MAJOR; pre-1.0 breaking bumps MINOR). Full release process is in `rules/semver-tagging.md`.
 
 ### PR Template Standard
 
-Every repo must have a `.github/PULL_REQUEST_TEMPLATE.md` with four required sections: Summary, Type of Change, Test Plan, and Checklist. Optional sections (API Changes, Database/Schema, Screenshots, Dependencies) are included when applicable. PR title must be valid Conventional Commits format. PRs are optional for solo developers without CI/CD; required once gates or team members are added. See `rules/pr-template-standard.md` for section details.
+Every repo's `.github/PULL_REQUEST_TEMPLATE.md` requires Summary, Type of Change, Test Plan, and Checklist sections. Full section spec is in `rules/pr-template-standard.md`.
 
 ### Conventional Commits
 
-All commit messages must follow Conventional Commits format: `<type>(<scope>): <description>`.
+Commit messages follow `<type>(<scope>): <description>` — imperative, lowercase, no trailing period, no authorship attributions. Full type list and constraints are in `rules/conventional-commits.md`.
 
-Valid types: `feat`, `fix`, `perf`, `docs`, `chore`, `refactor`, `test`, `ci`, `style`.
+### Research Parallelism and Agent Efficacy Reporting
 
-- Type is required. Scope is optional but recommended (use the agent name or affected area).
-- Description is imperative, lowercase, no trailing period.
-- No authorship attributions in commit messages.
-- Body is optional. Use it for context on non-obvious changes.
-- Use `!` after type/scope for breaking changes: `feat(validate)!: require section coverage`.
-
-### Research Parallelism
-
-When investigating a question, exploring solutions, or researching unfamiliar territory:
-
-- Fan out with a minimum of 3 parallel agents, each approaching the problem from a different angle.
-- Wait for all agents to return before synthesizing a response.
-- Synthesize the best-of-breed answer by comparing and combining results — do not simply pick one.
-- If agents disagree, highlight the disagreement and explain which perspective is strongest and why.
-- When recommending external libraries, tools, or utilities, assess project liveliness (last release, commit recency, issue activity, contributor count). Include a liveliness assessment with status (Active / Maintenance-only / Stale / Abandoned) and risk level (Low / Medium / High). Do not recommend Abandoned projects without justification and a mitigation plan.
-
-### Agent Efficacy Reporting
-
-Every research, design, and implementation phase that invokes agents must include an Agent Efficacy Report containing:
-
-1. Agent table — for each agent: name, type, duration, key contributions, value rating (High/Medium/Low).
-2. Disagreements — where agents disagreed and which perspective was chosen and why.
-3. Synergies — how agent outputs combined or complemented each other.
-4. Custom agent feedback — improvement opportunities for custom agents.
+Research tasks fan out to 3+ parallel agents from different angles; synthesize a best-of-breed answer, surface disagreements, and produce an Agent Efficacy Report. Full protocol, dependency liveliness assessment, and report structure are in `rules/research-parallelism.md`.
 
 ## Security Policies
 
 ### No MCP Servers
 
-This repo prohibits MCP server usage in all content it produces or distributes.
-
-- Never add `mcp-servers` to any frontmatter field in agent wrappers.
-- Never reference MCP server packages (npm, PyPI, or otherwise) in agent content.
-- All tool access must be controlled through explicit `tools` allowlists in agent wrapper frontmatter.
-- Never commit a project-level `.claude/settings.json` (or `.claude/settings.local.json`) into a repo — Claude Code auto-loads that path as project config when a user opens the repo, the CVE-2025-59536 auto-execution vector. The repo's root `settings.json` is the deliberate, audited distribution payload: never auto-loaded, active only after a user runs `setup.sh` to symlink it into user-level `~/.claude/`. The carve-out is that root file alone; it never licenses committing a `.claude/settings.json` path (`.gitignore` ignores `.claude/` as added friction, not a hard gate).
-- If a user requests MCP server integration, explain this policy and suggest the `tools` allowlist approach instead.
-
-This policy exists because runtime-loaded MCP servers are a supply-chain attack surface that the `tools` allowlist cannot constrain — the threat class captured by OWASP ASI04 (Agentic Supply Chain Vulnerabilities) and OWASP MCP04:2025 (Software Supply Chain Attacks). Both known Claude Code CVEs reinforce the related lesson that committed content must never carry runtime-loaded configuration: CVE-2025-59536 (pre-trust-dialog code execution from a repository-controlled `.claude/settings.json`, via project hooks and an MCP consent bypass; CVSS 8.7, fixed v1.0.111) and CVE-2026-21852 (API-key exfiltration via `ANTHROPIC_BASE_URL` redirection in the same file, with no MCP involvement; CVSS 5.3, fixed v2.0.65).
-
-The policy extends to **any runtime mechanism that injects external network content into the harness system context**, not just MCP as a protocol. Hooks that fetch content from a remote URL and emit it as `systemMessage` are policy-equivalent to MCP server injection. See `rules/no-mcp-servers.md` for the full prohibited-mechanism list and acceptable defense-in-depth alternatives. ADR-046 documents the removal of one such mechanism (a UserPromptSubmit hook that injected external API content into the system context).
+This repo prohibits MCP server usage and any runtime mechanism that injects external network content into the harness system context. All tool access is controlled through explicit `tools` allowlists; never commit a project-level `.claude/settings.json`. Full policy, CVE rationale, and acceptable defense-in-depth alternatives are in `rules/no-mcp-servers.md`.
 
 ### Minimal Tool Lists
 
-Grant only the tools an agent's purpose requires. `Bash` is granted only to agents whose body documents an execution workflow — the justification table in ADR-069 is the authoritative record of what qualifies; all other read-only expert agents must not carry it. The permitted set is enforced by the `CLAUDE_BASH_ALLOWED` allowlist in `validate.sh`, with per-agent justifications recorded in ADR-069. Never embed tokens, keys, or passwords in any agent or rule.
+Grant only the tools an agent's purpose requires. `Bash` is limited to the `CLAUDE_BASH_ALLOWED` allowlist in `validate.sh`, with per-agent justifications in ADR-069. Never embed tokens, keys, or passwords in any agent or rule.
 
 ### Secrets Guard
 
-Secrets are guarded in two layers sharing one pattern set. **Layer 1 (pre-commit):** `setup.sh` installs `hooks/secrets-guard.sh` as the framework repo's `pre-commit` hook, blocking commits containing unencrypted Ansible vault files (header-based detection), PEM private keys, AWS access key IDs, GitHub tokens (all five `gh*_` prefixes, incl. the `ghs_` Actions `GITHUB_TOKEN`), and SSH private-key file paths (incl. FIDO2 `_sk` keys). **Layer 2 (in-session):** `hooks/session-secrets-guard.sh` is a `PreToolUse` hook that denies the same material on `Bash`/`Write`/`Edit`/`MultiEdit`/`NotebookEdit` before it reaches disk and fails closed when `jq` is absent (ADR-053, ADR-057). Bypass either via `SKIP_SECRETS_GUARD=1` (one-shot, auditable), `.secrets-guard-allowlist` (per-path glob, version-controlled), or `--no-verify` (commit only, emergencies). The pre-commit layer only fires on the framework repo until a target-repo installer ships; pair with a server-side scanning gate to fully close the loop. See `rules/secrets-guard.md`, ADR-047, and ADR-053.
+Secrets are guarded in two fail-closed layers — pre-commit (`hooks/secrets-guard.sh`) and in-session `PreToolUse` (`hooks/session-secrets-guard.sh`) — sharing one pattern set and override mechanisms (`SKIP_SECRETS_GUARD=1`, `.secrets-guard-allowlist`). Full pattern set and layer detail are in `rules/secrets-guard.md`.
 
 ### GitHub Identity Guard
 
-On a multi-account host, a wrong active `gh` account causes a `git push` or mutating `gh` call to target — or fail against — the wrong account. Two fail-closed layers block this: an in-session `PreToolUse` hook (`hooks/session-gh-identity-guard.sh`) for agent `git push`/`gh` mutations, and a git pre-push hook (`hooks/gh-identity-guard.sh`) for the raw-terminal/IDE/script vector. The signal is hybrid — a local-only (gitignored) `.gh-expected-identity` pin (strict login match) when present, else repo accessibility — github.com only, with `GH_IDENTITY_OVERRIDE=<login>` (env var only; ADR-070) / `.gh-identity-allowlist` / `SKIP_GH_IDENTITY_GUARD=1` overrides. This extends the warn-only `validate.sh` preflight with enforcement. See `rules/gh-identity-guard.md`, ADR-054 (supersedes ADR-052), ADR-070, and `docs/multi-account-git-identity.md`.
+Two fail-closed layers block a `git push` or mutating `gh` call from the wrong account on a multi-account host: an in-session `PreToolUse` hook and a git pre-push hook. Full signal model and overrides are in `rules/gh-identity-guard.md`.
 
 ## Validation
 
@@ -214,4 +172,4 @@ Run before every push (enforced by the pre-push hook installed by `setup.sh`):
 ./validate.sh
 ```
 
-This checks: monolithic agent validation (frontmatter presence, `disable-model-invocation: true`, body present), agent catalog drift (via `scripts/regen-agent-catalog.sh --check` — AGENTS.md canonical: name presence vs `agents/*.md`, Domain/Use-when parity in the routing mirror `rules/agent-first-selection.md`, README Tier/Model), `Bash` tool allowlist (only ADR-069-listed agents may carry it; enforced by `CLAUDE_BASH_ALLOWED`), README Agents/Rules consistency (Current Agents/Rules vs files on disk), `web/instructions.md` Agent Catalog sync drift (presence and manifest pairs against `origin/dev` diff; override via `Web-Sync-Skip: <reason>` trailer), ADR validation (sequential numbering; gaps now allowed), hooks and symlinks, hook and shared-lib shellcheck linting (`hooks/*.sh` and `scripts/lib/*.sh`; errors on findings, skipped when shellcheck is absent), shared-lib self-tests (`scripts/lib/*.sh --self-test` run as subprocesses; ADR-061), relative markdown link resolution (superseded ADRs exempt — their bodies are frozen per the supersession-not-editing rule), documentation standards (heading depth, code fence tags), branch/PR state, and GitHub identity (warns when the active `gh` account cannot resolve the `origin` repo on multi-account hosts; skipped under `GH_TOKEN`/`GITHUB_TOKEN` or non-`github.com` remotes).
+This checks: monolithic agent validation (frontmatter presence, `disable-model-invocation: true`, no prohibited `mcp-servers` key, body present), rule Enforcement-line presence (every `rules/*.md` carries `**Enforcement:**` near its H1; off-vocabulary mechanism tokens warn — ADR-084), agent catalog drift (via `scripts/regen-agent-catalog.sh --check` — AGENTS.md canonical: name presence vs `agents/*.md`, Domain/Use-when parity in the routing mirror `rules/agent-first-selection.md`, README Tier/Model), `Bash` tool allowlist (only ADR-069-listed agents may carry it; enforced by `CLAUDE_BASH_ALLOWED`), README Agents/Rules consistency (Current Agents/Rules vs files on disk), `web/instructions.md` Agent Catalog sync drift (presence and manifest pairs against `origin/dev` diff; override via `Web-Sync-Skip: <reason>` trailer), ADR validation (sequential numbering; gaps now allowed), hooks and symlinks, hook and shared-lib shellcheck linting (`hooks/*.sh` and `scripts/lib/*.sh`; errors on findings, skipped when shellcheck is absent), shared-lib self-tests (`scripts/lib/*.sh --self-test` run as subprocesses; ADR-061), hook-pair lockstep (the duplicated secret-pattern set and identity-helper functions must stay byte-identical across their hook pairs; errors on drift; ADR-083), ruleset required-check drift (every context in rulesets/*.json must match a workflow job's effective check name; errors; offline — ADR-086), relative markdown link resolution (superseded ADRs exempt — their bodies are frozen per the supersession-not-editing rule), documentation standards (heading depth, code fence tags), branch/PR state, and GitHub identity (warns when the active `gh` account cannot resolve the `origin` repo on multi-account hosts; skipped under `GH_TOKEN`/`GITHUB_TOKEN` or non-`github.com` remotes).

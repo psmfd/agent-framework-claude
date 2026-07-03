@@ -17,15 +17,23 @@ Determine the scope:
 
 Surface the chosen scope (base ref, commit count, file count) to the user before fanning out.
 
+**Materialize the diff artifact** (Diff Ingestion Contract — ADR-087): `code-review-expert` and `security-review-expert` carry no Bash and cannot run git themselves, so the orchestrator writes the diff to a file they can `Read`:
+
+```bash
+git diff <base>..HEAD > <scratchpad>/review-diff.patch
+```
+
+Also capture the changed-file list (`git diff --name-only <base>..HEAD`) for the briefs. The linter runs git itself (it has Bash) and needs only the revision range.
+
 ## Step 2 — Fan out to three concurrent subagents
 
-Invoke the `Agent` tool **three times in a single message** so the subagents run concurrently with isolated context. Set `subagent_type` to `code-review-expert`, `security-review-expert`, and `linter`. Each brief must be self-contained — subagents share no memory — and must include the absolute repo path and the `<base>..HEAD` revision so each agent can read the diff and surrounding context directly:
+Invoke the `Agent` tool **three times in a single message** so the subagents run concurrently with isolated context. Set `subagent_type` to `code-review-expert`, `security-review-expert`, and `linter`. Each brief must be self-contained — subagents share no memory. The two review-agent briefs must include the absolute repo path, the **absolute diff artifact path** from Step 1, and the changed-file list; they read surrounding context from the working tree (head state) via `Read`/`Glob`/`Grep`:
 
-- **code-review-expert** — "Review the diff `<base>..HEAD` in `<absolute-repo-path>`. Read the diff and the surrounding context for each touched file. Produce findings per `rules/structured-review-format.md`."
-- **security-review-expert** — "Security review of the diff `<base>..HEAD` in `<absolute-repo-path>`. Map trust boundaries; identify auth/authz/secret/crypto concerns; cite first-party docs. Produce findings per `rules/structured-review-format.md`."
+- **code-review-expert** — "Review the change set in `<absolute-repo-path>`. The unified diff is at `<diff-artifact-path>` (Read it); changed files: `<list>`. Read surrounding context for each touched file from the working tree. If the diff artifact is missing or unreadable, return `**Verdict:** UNABLE_TO_REVIEW` with the reason. Produce findings per `rules/structured-review-format.md`."
+- **security-review-expert** — "Security review of the change set in `<absolute-repo-path>`. The unified diff is at `<diff-artifact-path>` (Read it); changed files: `<list>`. Map trust boundaries; identify auth/authz/secret/crypto concerns; cite first-party docs. If the diff artifact is missing or unreadable, return `**Verdict:** UNABLE_TO_REVIEW` with the reason. Produce findings per `rules/structured-review-format.md`."
 - **linter** — "Lint the files changed in `<base>..HEAD` in `<absolute-repo-path>`. Run the appropriate linter per file type in report-only mode."
 
-Each review agent ends with the `**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES` line defined in [structured-review-format.md](../rules/structured-review-format.md). An agent that cannot proceed returns `BLOCKED` per the Return Contract in [research-parallelism.md](../rules/research-parallelism.md) — surface that to the user rather than synthesizing around it.
+Each review agent ends with the `**Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES | UNABLE_TO_REVIEW` line defined in [structured-review-format.md](../rules/structured-review-format.md). An agent that cannot proceed returns `BLOCKED` per the Return Contract in [research-parallelism.md](../rules/research-parallelism.md), or `UNABLE_TO_REVIEW` per the review format when it can proceed as an agent but cannot form a review judgment — surface either to the user rather than synthesizing around it.
 
 ## Step 3 — Synthesize the merged report
 
@@ -55,11 +63,12 @@ When all three return, produce a single output. Because reviewers are merged int
 
 Aggregate verdict is **most-severe-wins** (command-local synthesis policy):
 
+- Any reviewer reporting `UNABLE_TO_REVIEW` → surface to the user before computing an aggregate verdict; do not silently drop that reviewer's lane from the table or fold it into a `PASS`. Resolve the blocker (re-scope the diff, fix the ref) and re-run that reviewer, or present the partial two-reviewer result with the gap stated explicitly.
 - Any reviewer reports `NEEDS_CHANGES` → aggregate is `NEEDS_CHANGES`.
 - Otherwise any `PASS_WITH_WARNINGS` → aggregate is `PASS_WITH_WARNINGS`.
 - Otherwise `PASS`.
 
-This is a divergence fan-out (three different agents, different lenses), so the aggregation ladder in `consensus-by-replication.md` does not apply — that ladder governs replication of one agent on identical prompts.
+This is a divergence fan-out (three different agents, different lenses) using a command-local most-severe-wins synthesis policy — the replication ladder in `consensus-by-replication.md` does not apply here because the agents are different, not identical. See the Fan-Out Shapes and Aggregation Policy table in [orchestrator-protocol.md](../rules/orchestrator-protocol.md) for the full comparison.
 
 ## Constraints
 

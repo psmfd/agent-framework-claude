@@ -4,6 +4,8 @@ description: 'Require standardized PR template sections across all ecosystem rep
 
 # PR Template Standard
 
+**Enforcement:** CI lint-pr-title.yml (PR title format only); self-report only (template section completeness)
+
 Every repository in the ecosystem must have a `.github/PULL_REQUEST_TEMPLATE.md` with a consistent section structure. Individual repositories customize the checklist items, but the section layout is standardized.
 
 ## Required Sections
