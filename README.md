@@ -131,6 +131,7 @@ agent-framework-claude/
 │   ├── dotnet-expert.md
 │   ├── gh-cli-expert.md
 │   ├── gitflow-expert.md
+│   ├── grafana-expert.md
 │   ├── helm-expert.md
 │   ├── hyperv-expert.md
 │   ├── kafka-developer-expert.md
@@ -450,6 +451,7 @@ flowchart TD
 | `dotnet-expert` | opus | Domain Specialist | .NET guidance. .NET 10 LTS, ASP.NET Core, EF Core, worker services, cross-platform builds. |
 | `gh-cli-expert` | opus | Domain Specialist | GitHub CLI guidance. Consults `gh --help` dynamically. Read-only by default. |
 | `gitflow-expert` | opus | Domain Specialist | Git workflow guidance. Examines repo state, provides context-aware recommendations. |
+| `grafana-expert` | opus | Domain Specialist | Grafana guidance. Provisioning as code, unified alerting, dashboards, LGTM datasource/correlation config, auth, security, deployment. |
 | `helm-expert` | opus | Domain Specialist | Helm guidance. Chart authoring, values merge, hooks, template debugging, release workflows. |
 | `hyperv-expert` | opus | Domain Specialist | Hyper-V guidance. Hypervisor architecture, VM generations, VHDX, switches, nested virt, WSL2, WHPX, VBS/HVCI. |
 | `kafka-developer-expert` | opus | Domain Specialist | Kafka developer guidance. Producer/consumer for Kafka 4.x, delivery semantics, idempotence/transactions, consumer-group and rebalance behavior, topic/partition design. |

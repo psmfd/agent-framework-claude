@@ -128,6 +128,7 @@ This table is the routing reference — scan it on every task before delegating 
 | `dotnet-expert` | .NET | .NET 10 LTS SDK, ASP.NET Core, worker services, DI, EF Core, publishing, security |
 | `gh-cli-expert` | GitHub CLI | Issues, PRs, releases, checks, repos via `gh` commands |
 | `gitflow-expert` | Git workflows | Branching strategies, PR workflows, release processes, commit conventions |
+| `grafana-expert` | Grafana | Provisioning as code, unified alerting, dashboard authoring, LGTM datasource/correlation config, auth and org model, security, deployment |
 | `helm-expert` | Helm | Chart authoring, values merge semantics, hooks, template debugging, dependency management |
 | `hyperv-expert` | Hyper-V | Type-1 hypervisor, VM generations + VHDX, virtual switches, checkpoints, nested virtualization, WSL2 utility VM, WHPX, VBS/HVCI |
 | `kafka-developer-expert` | Kafka development | Producer/consumer development for Apache Kafka 4.x, delivery semantics, idempotence/transactions, consumer-group behavior, topic/partition design |

@@ -91,6 +91,7 @@ Custom agents encode domain expertise, known fragilities, and validated patterns
 | `dotnet-expert` | Domain Specialist | .NET | .NET 10 LTS SDK, cross-platform builds, ASP.NET Core, worker services, DI, EF Core, testing, publishing, security |
 | `gh-cli-expert` | Domain Specialist | GitHub CLI | Working with issues, PRs, releases, checks, repos via `gh` commands |
 | `gitflow-expert` | Domain Specialist | Git workflows | Branching strategies, PR workflows, release processes, commit conventions |
+| `grafana-expert` | Domain Specialist | Grafana | Provisioning as code, unified alerting, dashboard authoring, LGTM datasource/correlation config, auth and org model, security hardening, deployment patterns |
 | `helm-expert` | Domain Specialist | Helm | Chart authoring, values merge semantics, hooks, template debugging, dependency management, release workflows |
 | `hyperv-expert` | Domain Specialist | Hyper-V | Type-1 hypervisor, VM generations + VHDX, virtual switches, checkpoints, nested virtualization, WSL2 utility VM, WHPX, VBS/HVCI |
 | `kafka-developer-expert` | Domain Specialist | Kafka development | Producer/consumer dev for Kafka 4.x, delivery semantics, idempotence/transactions, consumer groups/rebalance, partition design, client auth |
