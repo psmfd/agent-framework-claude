@@ -96,6 +96,7 @@ Custom agents encode domain expertise, known fragilities, and validated patterns
 | `kafka-developer-expert` | Domain Specialist | Kafka development | Producer/consumer dev for Kafka 4.x, delivery semantics, idempotence/transactions, consumer groups/rebalance, partition design, client auth |
 | `kafka-self-managed-expert` | Domain Specialist | Self-managed Kafka | Kafka 4.x on Kubernetes, Strimzi and first-party operators, KRaft, storage, HA, cluster admin, encryption/auth |
 | `linter` | Execution Provider | Code quality | Running shellcheck, markdownlint, yamllint, and other linters on changed files |
+| `longhorn-expert` | Domain Specialist | Longhorn storage | Architecture and v1/v2 data engines, install prerequisites, StorageClass/volume management, RWX, snapshots vs backups and DR, node/disk ops and drain policies, upgrades, Longhorn-on-Talos |
 | `proxmox-expert` | Domain Specialist | Proxmox VE | qm/pct/pvecm/pvesm CLI, KVM VM + LXC lifecycle, storage, bridged/VLAN networking, clustering/HA, vzdump/PBS backups, cloud-init, API tokens |
 | `security-review-expert` | Domain Specialist | Security review | Semantic security review for C#/.NET, Python, TypeScript, T-SQL, Azure/AWS IAM and networking, Active Directory/LDAP. Backed by first-party documentation. |
 | `shell-expert` | Domain Specialist | Shell scripting | Bash/Zsh/POSIX sh compatibility, idioms, security, cross-platform strategies |
