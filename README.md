@@ -124,23 +124,28 @@ agent-framework-claude/
 │   ├── aws-msk-expert.md
 │   ├── azure-devops-expert.md
 │   ├── azure-infra-expert.md
+│   ├── cilium-expert.md
 │   ├── code-review-expert.md
 │   ├── docker-expert.md
 │   ├── docs-expert.md
 │   ├── dotnet-expert.md
 │   ├── gh-cli-expert.md
 │   ├── gitflow-expert.md
+│   ├── grafana-expert.md
 │   ├── helm-expert.md
 │   ├── hyperv-expert.md
 │   ├── kafka-developer-expert.md
 │   ├── kafka-self-managed-expert.md
+│   ├── lgtm-backends-expert.md
 │   ├── linter.md
+│   ├── longhorn-expert.md
 │   ├── proxmox-expert.md
 │   ├── security-review-expert.md
 │   ├── shell-expert.md
 │   ├── talos-expert.md
 │   ├── tauri-expert.md
 │   ├── terraform-expert.md
+│   ├── tetragon-expert.md
 │   ├── vcluster-expert.md
 │   ├── work-item-management-expert.md
 │   └── wsl2-expert.md
@@ -440,23 +445,28 @@ flowchart TD
 | `aws-msk-expert` | opus | Domain Specialist | Amazon MSK guidance. Provisioned vs Serverless, broker sizing, authentication (IAM, SASL/SCRAM, mTLS), MSK Connect, MSK Replicator, monitoring. |
 | `azure-devops-expert` | opus | Domain Specialist | Azure DevOps guidance. Pipelines, repos, boards, work items, REST API, az devops CLI. |
 | `azure-infra-expert` | opus | Domain Specialist | Azure infrastructure guidance. Entra ID, Key Vault, SignalR, Storage, Private Endpoints, ExpressRoute, Log Analytics. |
+| `cilium-expert` | opus | Domain Specialist | Cilium CNI guidance. Install/upgrades, IPAM, datapath modes, network policy, LB-IPAM/BGP, ClusterMesh, Hubble, encryption, Gateway API, Talos integration. |
 | `code-review-expert` | opus | Domain Specialist | Semantic code review. Logic errors, design quality, security concerns, requirement fidelity. |
 | `docker-expert` | opus | Domain Specialist | Docker guidance. Dockerfiles, BuildKit, multi-stage, multi-platform, Compose v2, security. |
 | `docs-expert` | opus | Domain Specialist | Documentation guidance. Best practices, content style, curation, Mermaid diagrams. |
 | `dotnet-expert` | opus | Domain Specialist | .NET guidance. .NET 10 LTS, ASP.NET Core, EF Core, worker services, cross-platform builds. |
 | `gh-cli-expert` | opus | Domain Specialist | GitHub CLI guidance. Consults `gh --help` dynamically. Read-only by default. |
 | `gitflow-expert` | opus | Domain Specialist | Git workflow guidance. Examines repo state, provides context-aware recommendations. |
+| `grafana-expert` | opus | Domain Specialist | Grafana guidance. Provisioning as code, unified alerting, dashboards, LGTM datasource/correlation config, auth, security, deployment. |
 | `helm-expert` | opus | Domain Specialist | Helm guidance. Chart authoring, values merge, hooks, template debugging, release workflows. |
 | `hyperv-expert` | opus | Domain Specialist | Hyper-V guidance. Hypervisor architecture, VM generations, VHDX, switches, nested virt, WSL2, WHPX, VBS/HVCI. |
 | `kafka-developer-expert` | opus | Domain Specialist | Kafka developer guidance. Producer/consumer for Kafka 4.x, delivery semantics, idempotence/transactions, consumer-group and rebalance behavior, topic/partition design. |
 | `kafka-self-managed-expert` | opus | Domain Specialist | Self-managed Kafka guidance. Kafka 4.x on Kubernetes, Strimzi, KRaft, storage, HA, cluster administration, encryption/authentication. |
+| `lgtm-backends-expert` | opus | Domain Specialist | Grafana LGTM backends guidance. Loki, Tempo, Mimir, Alloy pipelines, object storage, backend-side correlation. |
 | `linter` | sonnet | Execution Provider | Multi-tool linting. Discovers files, runs linters, reports findings, applies auto-fixes. |
+| `longhorn-expert` | opus | Domain Specialist | Longhorn storage guidance. v1/v2 data engines, StorageClass/volume management, RWX, backups and DR, node ops and drain policies, upgrades, Talos integration. |
 | `proxmox-expert` | opus | Domain Specialist | Proxmox VE guidance. qm/pct/pvecm CLI, VM + LXC lifecycle, storage, networking, clustering/HA, vzdump/PBS, cloud-init, API tokens. |
 | `security-review-expert` | opus | Domain Specialist | Semantic security review. C#/.NET, Python, TypeScript, T-SQL, Azure/AWS IAM and networking, AD/LDAP. First-party docs. |
 | `shell-expert` | opus | Domain Specialist | Shell scripting guidance. Bash/Zsh/POSIX compatibility, coreutils, security patterns. |
 | `talos-expert` | opus | Domain Specialist | Talos Linux guidance. talosctl / machine API, machine config, bootstrap, Image Factory, OS/k8s upgrades, KubeSpan, Omni. |
 | `tauri-expert` | opus | Domain Specialist | Tauri 2 desktop app guidance. tauri.conf.json, codegen, build/bundle phases, capabilities, sidecars, plugins, CI. |
 | `terraform-expert` | opus | Domain Specialist | Terraform/OpenTofu guidance. HCL, providers, state/backends, modules, workspaces, plan/apply, drift, import, testing, CI/CD. |
+| `tetragon-expert` | opus | Domain Specialist | Tetragon runtime security guidance. eBPF observability and enforcement, TracingPolicy CRDs, Sigkill/Override with observe-first discipline, tetra CLI, export pipeline, detection patterns, Talos/Cilium coexistence. |
 | `vcluster-expert` | opus | Domain Specialist | vCluster guidance. Virtual cluster lifecycle, configuration, syncing, networking, licensing. |
 | `work-item-management-expert` | opus | Domain Specialist | Work item taxonomy across GitHub Issues / Projects v2 and Azure DevOps Boards. Read-only by default. |
 | `wsl2-expert` | opus | Domain Specialist | WSL2 guidance. wsl.exe CLI, export/import, wsl.conf/.wslconfig, systemd, NAT vs mirrored networking, interop. |

@@ -84,23 +84,28 @@ Custom agents encode domain expertise, known fragilities, and validated patterns
 | `aws-msk-expert` | Domain Specialist | AWS MSK | Amazon MSK provisioned vs serverless, broker sizing/storage, auth modes (IAM/SASL-SCRAM/mTLS), MSK Connect, MSK Replicator, version management |
 | `azure-devops-expert` | Domain Specialist | Azure DevOps | Azure Repos git operations, YAML and classic pipelines, work item management, REST API patterns |
 | `azure-infra-expert` | Domain Specialist | Azure Infrastructure | Entra ID, Key Vault, Managed SignalR, Storage Accounts, Private Endpoints, Private Link, ExpressRoute, custom DNS, Log Analytics workspaces |
+| `cilium-expert` | Domain Specialist | Cilium CNI | Install/upgrades, IPAM, tunnel vs native routing, kube-proxy replacement, CiliumNetworkPolicy/L7/FQDN, LB-IPAM/L2/BGP, ClusterMesh, Hubble, WireGuard/IPsec, Gateway API, Cilium-on-Talos |
 | `code-review-expert` | Domain Specialist | Code review | Semantic review — logic errors, design quality, security concerns, requirement fidelity |
 | `docker-expert` | Domain Specialist | Docker | Dockerfiles, BuildKit, rootless builds, multi-stage, multi-platform, Compose v2, security patterns |
 | `docs-expert` | Domain Specialist | Documentation | Best practices, content style, curation, Mermaid diagrams for general display and Azure DevOps |
 | `dotnet-expert` | Domain Specialist | .NET | .NET 10 LTS SDK, cross-platform builds, ASP.NET Core, worker services, DI, EF Core, testing, publishing, security |
 | `gh-cli-expert` | Domain Specialist | GitHub CLI | Working with issues, PRs, releases, checks, repos via `gh` commands |
 | `gitflow-expert` | Domain Specialist | Git workflows | Branching strategies, PR workflows, release processes, commit conventions |
+| `grafana-expert` | Domain Specialist | Grafana | Provisioning as code, unified alerting, dashboard authoring, LGTM datasource/correlation config, auth and org model, security hardening, deployment patterns |
 | `helm-expert` | Domain Specialist | Helm | Chart authoring, values merge semantics, hooks, template debugging, dependency management, release workflows |
 | `hyperv-expert` | Domain Specialist | Hyper-V | Type-1 hypervisor, VM generations + VHDX, virtual switches, checkpoints, nested virtualization, WSL2 utility VM, WHPX, VBS/HVCI |
 | `kafka-developer-expert` | Domain Specialist | Kafka development | Producer/consumer dev for Kafka 4.x, delivery semantics, idempotence/transactions, consumer groups/rebalance, partition design, client auth |
 | `kafka-self-managed-expert` | Domain Specialist | Self-managed Kafka | Kafka 4.x on Kubernetes, Strimzi and first-party operators, KRaft, storage, HA, cluster admin, encryption/auth |
+| `lgtm-backends-expert` | Domain Specialist | LGTM backends | Loki (LogQL, deployment modes, retention), Tempo (TraceQL, metrics-generator), Mimir (ingest, blocks storage, multi-tenancy), Alloy pipelines, S3/MinIO object storage, backend-side correlation |
 | `linter` | Execution Provider | Code quality | Running shellcheck, markdownlint, yamllint, and other linters on changed files |
+| `longhorn-expert` | Domain Specialist | Longhorn storage | Architecture and v1/v2 data engines, install prerequisites, StorageClass/volume management, RWX, snapshots vs backups and DR, node/disk ops and drain policies, upgrades, Longhorn-on-Talos |
 | `proxmox-expert` | Domain Specialist | Proxmox VE | qm/pct/pvecm/pvesm CLI, KVM VM + LXC lifecycle, storage, bridged/VLAN networking, clustering/HA, vzdump/PBS backups, cloud-init, API tokens |
 | `security-review-expert` | Domain Specialist | Security review | Semantic security review for C#/.NET, Python, TypeScript, T-SQL, Azure/AWS IAM and networking, Active Directory/LDAP. Backed by first-party documentation. |
 | `shell-expert` | Domain Specialist | Shell scripting | Bash/Zsh/POSIX sh compatibility, idioms, security, cross-platform strategies |
 | `talos-expert` | Domain Specialist | Talos Linux | talosctl / machine API, machine config, cluster bootstrap, Image Factory + system extensions, OS/k8s upgrades, KubeSpan, Omni |
 | `tauri-expert` | Domain Specialist | Tauri | Tauri 2 desktop app authoring — tauri.conf.json schema, generate_context!() codegen, build vs bundle phases, capabilities v2, cross-platform packaging, sidecar/externalBin with Rust target triples, plugin ecosystem, frontend integration, CLI, and GitHub Actions CI |
 | `terraform-expert` | Domain Specialist | Terraform / OpenTofu | HCL, providers, state and remote backends, modules, workspaces, plan/apply, drift, import, testing, CI/CD |
+| `tetragon-expert` | Domain Specialist | Tetragon runtime security | eBPF runtime security observability and enforcement — install and kernel/BTF prerequisites, TracingPolicy CRDs and selectors, Sigkill/Override enforcement with observe-first discipline, the tetra CLI and export pipeline, detection patterns, Talos/Cilium coexistence |
 | `vcluster-expert` | Domain Specialist | vCluster | Virtual cluster lifecycle, vcluster.yaml configuration, resource syncing, networking, licensing, platform management |
 | `work-item-management-expert` | Domain Specialist | Work item management | GitHub Issues / Projects v2 and Azure DevOps Boards — type selection, field schemas, label and tag conventions, REST and CLI formatting, cross-platform translation |
 | `wsl2-expert` | Domain Specialist | WSL2 | wsl.exe CLI, distro export/import, wsl.conf + .wslconfig, systemd in WSL2, NAT vs mirrored networking, interop |

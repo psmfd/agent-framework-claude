@@ -121,23 +121,28 @@ This table is the routing reference — scan it on every task before delegating 
 | `aws-msk-expert` | Amazon MSK | MSK Provisioned vs Serverless, broker sizing, storage/tiered storage, IAM/SASL/mTLS authentication, MSK Connect, MSK Replicator, monitoring |
 | `azure-devops-expert` | Azure DevOps | Repos, YAML and classic pipelines, work items, REST API patterns |
 | `azure-infra-expert` | Azure Infrastructure | Entra ID, Key Vault, SignalR, Storage, Private Endpoints, ExpressRoute, custom DNS, Log Analytics |
+| `cilium-expert` | Cilium CNI | Install/upgrades, IPAM, datapath modes, network policy, LB-IPAM/L2/BGP, ClusterMesh, Hubble, encryption, Gateway API, Cilium-on-Talos |
 | `code-review-expert` | Code review | Semantic review — logic errors, design quality, security, requirement fidelity |
 | `docker-expert` | Docker | Dockerfiles, BuildKit, rootless builds, multi-stage, multi-platform, Compose v2 |
 | `docs-expert` | Documentation | Best practices, content style, curation, Mermaid diagrams |
 | `dotnet-expert` | .NET | .NET 10 LTS SDK, ASP.NET Core, worker services, DI, EF Core, publishing, security |
 | `gh-cli-expert` | GitHub CLI | Issues, PRs, releases, checks, repos via `gh` commands |
 | `gitflow-expert` | Git workflows | Branching strategies, PR workflows, release processes, commit conventions |
+| `grafana-expert` | Grafana | Provisioning as code, unified alerting, dashboard authoring, LGTM datasource/correlation config, auth and org model, security, deployment |
 | `helm-expert` | Helm | Chart authoring, values merge semantics, hooks, template debugging, dependency management |
 | `hyperv-expert` | Hyper-V | Type-1 hypervisor, VM generations + VHDX, virtual switches, checkpoints, nested virtualization, WSL2 utility VM, WHPX, VBS/HVCI |
 | `kafka-developer-expert` | Kafka development | Producer/consumer development for Apache Kafka 4.x, delivery semantics, idempotence/transactions, consumer-group behavior, topic/partition design |
 | `kafka-self-managed-expert` | Self-managed Kafka | Kafka 4.x on Kubernetes, Strimzi and first-party operators, KRaft, storage, high availability, cluster administration |
+| `lgtm-backends-expert` | LGTM backends | Loki (LogQL, deployment modes, retention), Tempo (TraceQL, metrics-generator), Mimir (ingest, storage, multi-tenancy), Alloy pipelines, S3/MinIO, backend-side correlation |
 | `linter` | Code quality | Running shellcheck, markdownlint, yamllint, and other linters on changed files |
+| `longhorn-expert` | Longhorn storage | v1/v2 data engines, install prerequisites, StorageClass/volume management, RWX, snapshots vs backups and DR, node/disk ops, upgrades, Longhorn-on-Talos |
 | `proxmox-expert` | Proxmox VE | qm/pct/pvecm CLI, KVM VM + LXC lifecycle, storage, networking, clustering/HA, vzdump/PBS backups, cloud-init, API tokens |
 | `security-review-expert` | Security review | Semantic security review — C# / .NET, Python, TypeScript, T-SQL, Azure / AWS IAM and networking, AD / LDAP |
 | `shell-expert` | Shell scripting | Bash / Zsh / POSIX sh compatibility, idioms, security, cross-platform strategies |
 | `talos-expert` | Talos Linux | talosctl, machine config, cluster bootstrap, Image Factory + system extensions, OS/k8s upgrades, KubeSpan, Omni |
 | `tauri-expert` | Tauri | Tauri 2 desktop apps — tauri.conf.json schema, generate_context!() codegen, build vs bundle phases, capabilities v2, sidecars, plugins, frontend integration, CLI, GitHub Actions CI |
 | `terraform-expert` | Terraform / OpenTofu | HCL, providers, state and remote backends, modules, workspaces, plan/apply, drift, import, testing, CI/CD |
+| `tetragon-expert` | Tetragon runtime security | eBPF runtime security observability and enforcement, TracingPolicy CRDs and selectors, Sigkill/Override with observe-first discipline, tetra CLI and export pipeline, detection patterns, Talos/Cilium coexistence |
 | `vcluster-expert` | vCluster | Virtual cluster lifecycle, vcluster.yaml, resource syncing, networking, licensing |
 | `work-item-management-expert` | Work item management | GitHub Issues / Projects v2, Azure DevOps Boards — type selection, fields, labels, REST / CLI formatting |
 | `wsl2-expert` | WSL2 | wsl.exe CLI, distro export/import, wsl.conf + .wslconfig, systemd, NAT vs mirrored networking, interop |
