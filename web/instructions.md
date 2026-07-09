@@ -133,6 +133,7 @@ This table is the routing reference — scan it on every task before delegating 
 | `kafka-developer-expert` | Kafka development | Producer/consumer development for Apache Kafka 4.x, delivery semantics, idempotence/transactions, consumer-group behavior, topic/partition design |
 | `kafka-self-managed-expert` | Self-managed Kafka | Kafka 4.x on Kubernetes, Strimzi and first-party operators, KRaft, storage, high availability, cluster administration |
 | `linter` | Code quality | Running shellcheck, markdownlint, yamllint, and other linters on changed files |
+| `longhorn-expert` | Longhorn storage | v1/v2 data engines, install prerequisites, StorageClass/volume management, RWX, snapshots vs backups and DR, node/disk ops, upgrades, Longhorn-on-Talos |
 | `proxmox-expert` | Proxmox VE | qm/pct/pvecm CLI, KVM VM + LXC lifecycle, storage, networking, clustering/HA, vzdump/PBS backups, cloud-init, API tokens |
 | `security-review-expert` | Security review | Semantic security review — C# / .NET, Python, TypeScript, T-SQL, Azure / AWS IAM and networking, AD / LDAP |
 | `shell-expert` | Shell scripting | Bash / Zsh / POSIX sh compatibility, idioms, security, cross-platform strategies |

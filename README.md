@@ -136,6 +136,7 @@ agent-framework-claude/
 │   ├── kafka-developer-expert.md
 │   ├── kafka-self-managed-expert.md
 │   ├── linter.md
+│   ├── longhorn-expert.md
 │   ├── proxmox-expert.md
 │   ├── security-review-expert.md
 │   ├── shell-expert.md
@@ -453,6 +454,7 @@ flowchart TD
 | `kafka-developer-expert` | opus | Domain Specialist | Kafka developer guidance. Producer/consumer for Kafka 4.x, delivery semantics, idempotence/transactions, consumer-group and rebalance behavior, topic/partition design. |
 | `kafka-self-managed-expert` | opus | Domain Specialist | Self-managed Kafka guidance. Kafka 4.x on Kubernetes, Strimzi, KRaft, storage, HA, cluster administration, encryption/authentication. |
 | `linter` | sonnet | Execution Provider | Multi-tool linting. Discovers files, runs linters, reports findings, applies auto-fixes. |
+| `longhorn-expert` | opus | Domain Specialist | Longhorn storage guidance. v1/v2 data engines, StorageClass/volume management, RWX, backups and DR, node ops and drain policies, upgrades, Talos integration. |
 | `proxmox-expert` | opus | Domain Specialist | Proxmox VE guidance. qm/pct/pvecm CLI, VM + LXC lifecycle, storage, networking, clustering/HA, vzdump/PBS, cloud-init, API tokens. |
 | `security-review-expert` | opus | Domain Specialist | Semantic security review. C#/.NET, Python, TypeScript, T-SQL, Azure/AWS IAM and networking, AD/LDAP. First-party docs. |
 | `shell-expert` | opus | Domain Specialist | Shell scripting guidance. Bash/Zsh/POSIX compatibility, coreutils, security patterns. |
