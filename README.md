@@ -135,6 +135,7 @@ agent-framework-claude/
 │   ├── hyperv-expert.md
 │   ├── kafka-developer-expert.md
 │   ├── kafka-self-managed-expert.md
+│   ├── lgtm-backends-expert.md
 │   ├── linter.md
 │   ├── longhorn-expert.md
 │   ├── proxmox-expert.md
@@ -453,6 +454,7 @@ flowchart TD
 | `hyperv-expert` | opus | Domain Specialist | Hyper-V guidance. Hypervisor architecture, VM generations, VHDX, switches, nested virt, WSL2, WHPX, VBS/HVCI. |
 | `kafka-developer-expert` | opus | Domain Specialist | Kafka developer guidance. Producer/consumer for Kafka 4.x, delivery semantics, idempotence/transactions, consumer-group and rebalance behavior, topic/partition design. |
 | `kafka-self-managed-expert` | opus | Domain Specialist | Self-managed Kafka guidance. Kafka 4.x on Kubernetes, Strimzi, KRaft, storage, HA, cluster administration, encryption/authentication. |
+| `lgtm-backends-expert` | opus | Domain Specialist | Grafana LGTM backends guidance. Loki, Tempo, Mimir, Alloy pipelines, object storage, backend-side correlation. |
 | `linter` | sonnet | Execution Provider | Multi-tool linting. Discovers files, runs linters, reports findings, applies auto-fixes. |
 | `longhorn-expert` | opus | Domain Specialist | Longhorn storage guidance. v1/v2 data engines, StorageClass/volume management, RWX, backups and DR, node ops and drain policies, upgrades, Talos integration. |
 | `proxmox-expert` | opus | Domain Specialist | Proxmox VE guidance. qm/pct/pvecm CLI, VM + LXC lifecycle, storage, networking, clustering/HA, vzdump/PBS, cloud-init, API tokens. |

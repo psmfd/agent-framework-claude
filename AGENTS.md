@@ -95,6 +95,7 @@ Custom agents encode domain expertise, known fragilities, and validated patterns
 | `hyperv-expert` | Domain Specialist | Hyper-V | Type-1 hypervisor, VM generations + VHDX, virtual switches, checkpoints, nested virtualization, WSL2 utility VM, WHPX, VBS/HVCI |
 | `kafka-developer-expert` | Domain Specialist | Kafka development | Producer/consumer dev for Kafka 4.x, delivery semantics, idempotence/transactions, consumer groups/rebalance, partition design, client auth |
 | `kafka-self-managed-expert` | Domain Specialist | Self-managed Kafka | Kafka 4.x on Kubernetes, Strimzi and first-party operators, KRaft, storage, HA, cluster admin, encryption/auth |
+| `lgtm-backends-expert` | Domain Specialist | LGTM backends | Loki (LogQL, deployment modes, retention), Tempo (TraceQL, metrics-generator), Mimir (ingest, blocks storage, multi-tenancy), Alloy pipelines, S3/MinIO object storage, backend-side correlation |
 | `linter` | Execution Provider | Code quality | Running shellcheck, markdownlint, yamllint, and other linters on changed files |
 | `longhorn-expert` | Domain Specialist | Longhorn storage | Architecture and v1/v2 data engines, install prerequisites, StorageClass/volume management, RWX, snapshots vs backups and DR, node/disk ops and drain policies, upgrades, Longhorn-on-Talos |
 | `proxmox-expert` | Domain Specialist | Proxmox VE | qm/pct/pvecm/pvesm CLI, KVM VM + LXC lifecycle, storage, bridged/VLAN networking, clustering/HA, vzdump/PBS backups, cloud-init, API tokens |
