@@ -142,6 +142,7 @@ This table is the routing reference — scan it on every task before delegating 
 | `talos-expert` | Talos Linux | talosctl, machine config, cluster bootstrap, Image Factory + system extensions, OS/k8s upgrades, KubeSpan, Omni |
 | `tauri-expert` | Tauri | Tauri 2 desktop apps — tauri.conf.json schema, generate_context!() codegen, build vs bundle phases, capabilities v2, sidecars, plugins, frontend integration, CLI, GitHub Actions CI |
 | `terraform-expert` | Terraform / OpenTofu | HCL, providers, state and remote backends, modules, workspaces, plan/apply, drift, import, testing, CI/CD |
+| `tetragon-expert` | Tetragon runtime security | eBPF runtime security observability and enforcement, TracingPolicy CRDs and selectors, Sigkill/Override with observe-first discipline, tetra CLI and export pipeline, detection patterns, Talos/Cilium coexistence |
 | `vcluster-expert` | vCluster | Virtual cluster lifecycle, vcluster.yaml, resource syncing, networking, licensing |
 | `work-item-management-expert` | Work item management | GitHub Issues / Projects v2, Azure DevOps Boards — type selection, fields, labels, REST / CLI formatting |
 | `wsl2-expert` | WSL2 | wsl.exe CLI, distro export/import, wsl.conf + .wslconfig, systemd, NAT vs mirrored networking, interop |

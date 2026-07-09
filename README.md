@@ -145,6 +145,7 @@ agent-framework-claude/
 │   ├── talos-expert.md
 │   ├── tauri-expert.md
 │   ├── terraform-expert.md
+│   ├── tetragon-expert.md
 │   ├── vcluster-expert.md
 │   ├── work-item-management-expert.md
 │   └── wsl2-expert.md
@@ -465,6 +466,7 @@ flowchart TD
 | `talos-expert` | opus | Domain Specialist | Talos Linux guidance. talosctl / machine API, machine config, bootstrap, Image Factory, OS/k8s upgrades, KubeSpan, Omni. |
 | `tauri-expert` | opus | Domain Specialist | Tauri 2 desktop app guidance. tauri.conf.json, codegen, build/bundle phases, capabilities, sidecars, plugins, CI. |
 | `terraform-expert` | opus | Domain Specialist | Terraform/OpenTofu guidance. HCL, providers, state/backends, modules, workspaces, plan/apply, drift, import, testing, CI/CD. |
+| `tetragon-expert` | opus | Domain Specialist | Tetragon runtime security guidance. eBPF observability and enforcement, TracingPolicy CRDs, Sigkill/Override with observe-first discipline, tetra CLI, export pipeline, detection patterns, Talos/Cilium coexistence. |
 | `vcluster-expert` | opus | Domain Specialist | vCluster guidance. Virtual cluster lifecycle, configuration, syncing, networking, licensing. |
 | `work-item-management-expert` | opus | Domain Specialist | Work item taxonomy across GitHub Issues / Projects v2 and Azure DevOps Boards. Read-only by default. |
 | `wsl2-expert` | opus | Domain Specialist | WSL2 guidance. wsl.exe CLI, export/import, wsl.conf/.wslconfig, systemd, NAT vs mirrored networking, interop. |
