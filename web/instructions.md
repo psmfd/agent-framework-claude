@@ -121,6 +121,7 @@ This table is the routing reference — scan it on every task before delegating 
 | `aws-msk-expert` | Amazon MSK | MSK Provisioned vs Serverless, broker sizing, storage/tiered storage, IAM/SASL/mTLS authentication, MSK Connect, MSK Replicator, monitoring |
 | `azure-devops-expert` | Azure DevOps | Repos, YAML and classic pipelines, work items, REST API patterns |
 | `azure-infra-expert` | Azure Infrastructure | Entra ID, Key Vault, SignalR, Storage, Private Endpoints, ExpressRoute, custom DNS, Log Analytics |
+| `cilium-expert` | Cilium CNI | Install/upgrades, IPAM, datapath modes, network policy, LB-IPAM/L2/BGP, ClusterMesh, Hubble, encryption, Gateway API, Cilium-on-Talos |
 | `code-review-expert` | Code review | Semantic review — logic errors, design quality, security, requirement fidelity |
 | `docker-expert` | Docker | Dockerfiles, BuildKit, rootless builds, multi-stage, multi-platform, Compose v2 |
 | `docs-expert` | Documentation | Best practices, content style, curation, Mermaid diagrams |
