@@ -84,6 +84,7 @@ Custom agents encode domain expertise, known fragilities, and validated patterns
 | `aws-msk-expert` | Domain Specialist | AWS MSK | Amazon MSK provisioned vs serverless, broker sizing/storage, auth modes (IAM/SASL-SCRAM/mTLS), MSK Connect, MSK Replicator, version management |
 | `azure-devops-expert` | Domain Specialist | Azure DevOps | Azure Repos git operations, YAML and classic pipelines, work item management, REST API patterns |
 | `azure-infra-expert` | Domain Specialist | Azure Infrastructure | Entra ID, Key Vault, Managed SignalR, Storage Accounts, Private Endpoints, Private Link, ExpressRoute, custom DNS, Log Analytics workspaces |
+| `cilium-expert` | Domain Specialist | Cilium CNI | Install/upgrades, IPAM, tunnel vs native routing, kube-proxy replacement, CiliumNetworkPolicy/L7/FQDN, LB-IPAM/L2/BGP, ClusterMesh, Hubble, WireGuard/IPsec, Gateway API, Cilium-on-Talos |
 | `code-review-expert` | Domain Specialist | Code review | Semantic review — logic errors, design quality, security concerns, requirement fidelity |
 | `docker-expert` | Domain Specialist | Docker | Dockerfiles, BuildKit, rootless builds, multi-stage, multi-platform, Compose v2, security patterns |
 | `docs-expert` | Domain Specialist | Documentation | Best practices, content style, curation, Mermaid diagrams for general display and Azure DevOps |

@@ -124,6 +124,7 @@ agent-framework-claude/
 │   ├── aws-msk-expert.md
 │   ├── azure-devops-expert.md
 │   ├── azure-infra-expert.md
+│   ├── cilium-expert.md
 │   ├── code-review-expert.md
 │   ├── docker-expert.md
 │   ├── docs-expert.md
@@ -440,6 +441,7 @@ flowchart TD
 | `aws-msk-expert` | opus | Domain Specialist | Amazon MSK guidance. Provisioned vs Serverless, broker sizing, authentication (IAM, SASL/SCRAM, mTLS), MSK Connect, MSK Replicator, monitoring. |
 | `azure-devops-expert` | opus | Domain Specialist | Azure DevOps guidance. Pipelines, repos, boards, work items, REST API, az devops CLI. |
 | `azure-infra-expert` | opus | Domain Specialist | Azure infrastructure guidance. Entra ID, Key Vault, SignalR, Storage, Private Endpoints, ExpressRoute, Log Analytics. |
+| `cilium-expert` | opus | Domain Specialist | Cilium CNI guidance. Install/upgrades, IPAM, datapath modes, network policy, LB-IPAM/BGP, ClusterMesh, Hubble, encryption, Gateway API, Talos integration. |
 | `code-review-expert` | opus | Domain Specialist | Semantic code review. Logic errors, design quality, security concerns, requirement fidelity. |
 | `docker-expert` | opus | Domain Specialist | Docker guidance. Dockerfiles, BuildKit, multi-stage, multi-platform, Compose v2, security. |
 | `docs-expert` | opus | Domain Specialist | Documentation guidance. Best practices, content style, curation, Mermaid diagrams. |
