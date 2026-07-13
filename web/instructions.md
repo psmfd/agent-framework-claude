@@ -133,6 +133,7 @@ This table is the routing reference — scan it on every task before delegating 
 | `hyperv-expert` | Hyper-V | Type-1 hypervisor, VM generations + VHDX, virtual switches, checkpoints, nested virtualization, WSL2 utility VM, WHPX, VBS/HVCI |
 | `kafka-developer-expert` | Kafka development | Producer/consumer development for Apache Kafka 4.x, delivery semantics, idempotence/transactions, consumer-group behavior, topic/partition design |
 | `kafka-self-managed-expert` | Self-managed Kafka | Kafka 4.x on Kubernetes, Strimzi and first-party operators, KRaft, storage, high availability, cluster administration |
+| `kemp-loadmaster-expert` | Kemp LoadMaster | Progress Kemp LoadMaster ADC — deployment forms and licensing tiers, Virtual Services/SubVS, scheduling and persistence, health checking, SSL/ACME, HA pairs and cloud HA, ESP/WAF/GSLB, REST API and PowerShell automation |
 | `lgtm-backends-expert` | LGTM backends | Loki (LogQL, deployment modes, retention), Tempo (TraceQL, metrics-generator), Mimir (ingest, storage, multi-tenancy), Alloy pipelines, S3/MinIO, backend-side correlation |
 | `linter` | Code quality | Running shellcheck, markdownlint, yamllint, and other linters on changed files |
 | `longhorn-expert` | Longhorn storage | v1/v2 data engines, install prerequisites, StorageClass/volume management, RWX, snapshots vs backups and DR, node/disk ops, upgrades, Longhorn-on-Talos |
