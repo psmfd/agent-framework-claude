@@ -136,6 +136,7 @@ agent-framework-claude/
 │   ├── hyperv-expert.md
 │   ├── kafka-developer-expert.md
 │   ├── kafka-self-managed-expert.md
+│   ├── kemp-loadmaster-expert.md
 │   ├── lgtm-backends-expert.md
 │   ├── linter.md
 │   ├── longhorn-expert.md
@@ -457,6 +458,7 @@ flowchart TD
 | `hyperv-expert` | opus | Domain Specialist | Hyper-V guidance. Hypervisor architecture, VM generations, VHDX, switches, nested virt, WSL2, WHPX, VBS/HVCI. |
 | `kafka-developer-expert` | opus | Domain Specialist | Kafka developer guidance. Producer/consumer for Kafka 4.x, delivery semantics, idempotence/transactions, consumer-group and rebalance behavior, topic/partition design. |
 | `kafka-self-managed-expert` | opus | Domain Specialist | Self-managed Kafka guidance. Kafka 4.x on Kubernetes, Strimzi, KRaft, storage, HA, cluster administration, encryption/authentication. |
+| `kemp-loadmaster-expert` | opus | Domain Specialist | Progress Kemp LoadMaster guidance. Deployment forms, licensing tiers, Virtual Services/SubVS, persistence, SSL/ACME, HA pairs, ESP/WAF/GSLB, REST API and PowerShell automation. |
 | `lgtm-backends-expert` | opus | Domain Specialist | Grafana LGTM backends guidance. Loki, Tempo, Mimir, Alloy pipelines, object storage, backend-side correlation. |
 | `linter` | sonnet | Execution Provider | Multi-tool linting. Discovers files, runs linters, reports findings, applies auto-fixes. |
 | `longhorn-expert` | opus | Domain Specialist | Longhorn storage guidance. v1/v2 data engines, StorageClass/volume management, RWX, backups and DR, node ops and drain policies, upgrades, Talos integration. |
