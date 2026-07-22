@@ -51,7 +51,7 @@ For the full fan-out-shape comparison (divergence vs. replication vs. multi-revi
 
 ## Verdict
 
-End every review with a machine-readable verdict line:
+A review agent may optionally emit a fenced expertise-candidates block before its `## Findings` section, under the same schema and placement discipline as research agents — see `expertise-capture.md`. End every review with a machine-readable verdict line:
 
 ```markdown
 **Verdict:** PASS | PASS_WITH_WARNINGS | NEEDS_CHANGES | UNABLE_TO_REVIEW

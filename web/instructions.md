@@ -78,6 +78,8 @@ For any research task — investigating, debugging, evaluating libraries, making
 
 A crashed or empty-output sub-agent counts as `BLOCKED` — record it in the Agent Efficacy Report, never silently drop it or backfill with a replacement agent without telling the user.
 
+(On Claude Code CLI surfaces only, a return may additionally carry a fenced expertise-candidates block before the summary/verdict pair — `rules/expertise-capture.md`. Not applicable here: the expertise API and its create path are unreachable from web surfaces.)
+
 When research recommends an external library or tool, include a **liveliness assessment**: status (Active / Maintenance-only / Stale / Abandoned), last release, commit activity, risk level (Low / Medium / High). Do not recommend Abandoned projects without justification and a mitigation plan.
 
 For agent-behavioral fixes (changes to constraint language, boundary conditions, or prohibited actions in an agent), the fan-out MUST include `code-review-expert` for requirement-fidelity review of the proposed text. Two failure modes drove this rule: parallel artifacts that preserve the old behavior, and loophole text that re-opens the failure it names.

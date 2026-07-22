@@ -76,6 +76,29 @@ Entries land in the API's draft/review queue (the script never sends the
 `tenant` field, which would bypass it). On success, stdout is the created
 entry as returned by the server.
 
+The script also accepts `--check-only` (same arguments, body on stdin): it
+validates arguments, enums, body size, and control characters and runs the
+secret scan, then exits 0/2/10 without touching the config file, gates, key,
+or network. The expertise-capture pipeline (`rules/expertise-capture.md`,
+ADR-098) uses it to vet subagent-authored candidates before presentation.
+
+## Batch candidate approval (subagent-emitted)
+
+Candidates arriving via subagent returns (`rules/expertise-capture.md`) fold
+into the create path mechanically:
+
+- Each approved candidate maps to exactly one `expertise-create.sh`
+  invocation using the fields its candidate block carried; the approved body
+  is piped from the scratch file persisted at presentation time
+  (`< file`) — never rebuilt from memory and never via a heredoc, whose
+  delimiter a subagent-authored body could collide with (ADR-098).
+- Dedupe collisions (normalized domain+title) are surfaced to the user
+  before any create call, never silently dropped.
+- A rejected candidate is discarded, never retried automatically.
+
+The per-entry approval requirement in Constraints below applies unchanged —
+a batch is approved one named entry at a time.
+
 ## Constraints
 
 - **Create-only writes, user-approved, via the bundled script only.** The

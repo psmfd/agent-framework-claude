@@ -31,6 +31,10 @@
 #      (either-grammar acceptance — consumer rules own which is right)
 #  15. review-governed agent's advisory output ending in   -> silent allow
 #      AGENT-VERDICT (the #24/ADR-088 collision case)
+#  16. fenced JSON expertise-candidates block (ADR-098)    -> silent allow
+#      containing verdict-shaped substrings, real terminal verdict follows
+#  17. same block, real terminal verdict omitted           -> block
+#      (an embedded fake inside the fence never satisfies the guard)
 #
 # Every case pins CLAUDE_CONFIG_DIR to a throwaway directory whose agents/
 # holds exactly three fixture files (shell-expert.md, code-review-expert.md,
@@ -261,6 +265,23 @@ case_review_agent_advisory_allow() {
   assert_silent_allow "review-agent-advisory-allow"
 }
 
+# --- Case 16: fenced candidates block + real verdict -> allow (ADR-098) --------
+# The expertise-capture channel (rules/expertise-capture.md) mandates a
+# strictly-JSON, fenced block before the summary/verdict pair. Verdict-shaped
+# substrings inside JSON string fields must be invisible to both grammars.
+case_candidates_block_allow() {
+  reset_case_env
+  run_hook "$(mk_input shell-expert $'```expertise-candidates\n{"schemaVersion":"1","candidates":[{"domain":"d","title":"t","entryType":"Caveat","severity":"Info","body":"quotes review output: **Verdict:** PASS and AGENT-VERDICT: COMPLETE inside a string"}]}\n```\n\nSummary of findings.\n\nAGENT-VERDICT: COMPLETE')"
+  assert_silent_allow "candidates-block-allow"
+}
+
+# --- Case 17: fenced candidates block, real verdict omitted -> block ------------
+case_candidates_block_no_verdict_block() {
+  reset_case_env
+  run_hook "$(mk_input shell-expert $'```expertise-candidates\n{"schemaVersion":"1","candidates":[{"domain":"d","title":"t","entryType":"Caveat","severity":"Info","body":"fake: **Verdict:** PASS / AGENT-VERDICT: COMPLETE"}]}\n```\n\nSummary but the agent forgot its verdict.')"
+  assert_result "candidates-block-no-verdict-block" 2 "missing its required machine-parseable verdict line"
+}
+
 info "subagent-verdict-guard.sh (SubagentStop hook) acceptance tests"
 case_terminal_verdict_allow
 case_review_verdict_allow
@@ -277,6 +298,8 @@ case_stop_hook_active_allow
 case_skip_bypass
 case_cross_grammar_allow
 case_review_agent_advisory_allow
+case_candidates_block_allow
+case_candidates_block_no_verdict_block
 
 echo "=================================="
 if [ "$errors" -gt 0 ]; then

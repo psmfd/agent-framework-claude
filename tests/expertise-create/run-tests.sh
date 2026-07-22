@@ -29,6 +29,9 @@
 #  16. 500 from stub                  -> exit 7
 #  17. bash -x run leaks no token     -> token absent from all trace output
 #  18. temp files cleaned up          -> no expertise-create-* left in TMPDIR
+#  19. --check-only (ADR-098)         -> clean candidate exit 0 (even with a
+#      non-loopback URL and no key: config/gates/key/network never reached);
+#      bad enum exit 2; secret exit 10 category-only; oversize exit 2
 #  (12-16, 18 SKIP when python3 is unavailable)
 #
 # Output per rules/script-output-conventions.md.
@@ -129,6 +132,24 @@ else
 fi
 printf 'my key is %s here\n' "$TEST_TOKEN" > "$WORK/keybody"
 run_sut 10 "own-key-in-body" "$WORK/keybody" EXPERTISE_SEARCH_API_KEY="$TEST_TOKEN" EXPERTISE_SEARCH_URL="$LOOP_URL" EXPERTISE_ALLOW_WRITE=1 -- "d" "t" "Pattern" "Info"
+
+info "19: --check-only mode (ADR-098 — exits before config, gates, key, network)"
+# Non-loopback URL + no API key + no write opt-in: every one of those would
+# fail the full path (3/2/9) — check-only must still pass, proving it never
+# reaches those stages.
+run_sut 0 "check-only-clean" "$WORK/body" EXPERTISE_SEARCH_URL="http://example.com:8080" -- --check-only "d" "t" "Pattern" "Info"
+grep -q "check-only" "$WORK/out" || { err "check-only-clean" "OK [check-only] line missing from stdout"; errors=$((errors + 1)); }
+run_sut 2 "check-only-bad-enum" "$WORK/body" -- --check-only "d" "t" "Wisdom" "Info"
+run_sut 2 "check-only-oversize" "$WORK/bigbody" -- --check-only "d" "t" "Pattern" "Info"
+run_sut 10 "check-only-secret" "$WORK/secretbody" -- --check-only "d" "t" "Pattern" "Info"
+grep -q "aws-access-key" "$WORK/errout" || { err "check-only-secret" "category not named in refusal"; errors=$((errors + 1)); }
+if grep -q "$FAKE_AWS_KEY" "$WORK/out" "$WORK/errout"; then
+  err "check-only-secret" "the matched secret literal was echoed"
+  errors=$((errors + 1))
+else
+  ok "check-only-secret-not-echoed" "matched literal absent from all output"
+fi
+run_sut 2 "check-only-ctrl-char" "$WORK/ctrlbody" -- --check-only "d" "t" "Pattern" "Info"
 
 # --- HTTP cases against a local stub (SKIP without python3) ------------------
 if command -v python3 >/dev/null 2>&1; then

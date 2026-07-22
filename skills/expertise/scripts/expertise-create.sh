@@ -8,8 +8,14 @@
 # specific entry being created. Never wire it into a hook, background monitor,
 # or session-start mechanism, and never invoke it autonomously.
 #
-# Usage: expertise-create.sh <domain> <title> <entryType> <severity> [source] [tags-csv]
-#   body   — the entry body (markdown) on STDIN (heredoc); required, <= 64 KB
+# Usage: expertise-create.sh [--check-only] <domain> <title> <entryType> <severity> [source] [tags-csv]
+#   body   — the entry body (markdown) on STDIN; required, <= 64 KB
+#   --check-only — validate arguments, enums, body size, control characters,
+#                  and run the ADR-095 secret scan, then exit 0/2/10 WITHOUT
+#                  touching the config file, gates, key, or network. Used by
+#                  the expertise-capture pipeline (rules/expertise-capture.md,
+#                  ADR-098) to vet subagent-authored candidates before they
+#                  are presented for human approval.
 #   entryType — IssueFix | Caveat | Requirement | Pattern
 #   severity  — Info | Warning | Critical
 #   source    — optional, default "claude-session"
@@ -55,8 +61,14 @@ err() { printf 'ERROR [%s] %s\n' "$1" "$2" >&2; }
 
 # --- Arguments ---------------------------------------------------------------
 
+CHECK_ONLY=0
+if [ "${1:-}" = "--check-only" ]; then
+  CHECK_ONLY=1
+  shift
+fi
+
 if [ $# -lt 4 ] || [ $# -gt 6 ]; then
-  err "args" "usage: $0 <domain> <title> <entryType> <severity> [source] [tags-csv]  (body on stdin)"
+  err "args" "usage: $0 [--check-only] <domain> <title> <entryType> <severity> [source] [tags-csv]  (body on stdin)"
   exit 2
 fi
 DOMAIN="$1"
@@ -93,6 +105,61 @@ fi
 if [ "$body_bytes" -gt "$MAX_BODY_BYTES" ]; then
   err "body" "entry body exceeds ${MAX_BODY_BYTES} bytes — refusing (never truncated-then-sent)"
   exit 2
+fi
+
+# --- Field checks shared by --check-only and the full path -------------------
+
+# Keep in lockstep with hooks/secrets-guard.sh and
+# hooks/session-secrets-guard.sh SECRET_PATTERNS (ADR-095; validate.sh
+# check_lockstep_duplication enforces byte-identity). The PEM alternative uses
+# the optional-group form because BSD grep rejects empty alternation (ADR-053).
+SECRET_PATTERNS='-----BEGIN (RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY|(^|[^A-Z0-9])(AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}([^A-Z0-9]|$)|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{82,}|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|[Aa]uthorization: [Bb]earer [A-Za-z0-9._~+/=-]{20,}'
+
+# One concatenated buffer of every string field closes the same-call
+# field-splitting gap (ADR-096). All probes are boolean (`grep -q`): the
+# matched text never enters a variable and is never echoed — do not ever
+# replace these with -o/sed extraction for diagnostics.
+SCAN_BUFFER="${DOMAIN}
+${TITLE}
+${BODY}
+${SOURCE}
+${TAGS_CSV}"
+
+run_secret_scan() {
+  if printf '%s' "$SCAN_BUFFER" | grep -qE -- "$SECRET_PATTERNS"; then
+    categories=""
+    printf '%s' "$SCAN_BUFFER" | grep -qE -- '-----BEGIN (RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY' && categories="$categories pem-private-key"
+    printf '%s' "$SCAN_BUFFER" | grep -qE -- '(^|[^A-Z0-9])(AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}([^A-Z0-9]|$)' && categories="$categories aws-access-key"
+    printf '%s' "$SCAN_BUFFER" | grep -qE -- 'gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{82,}' && categories="$categories github-token"
+    printf '%s' "$SCAN_BUFFER" | grep -qE -- 'eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}' && categories="$categories signed-jwt"
+    printf '%s' "$SCAN_BUFFER" | grep -qE -- '[Aa]uthorization: [Bb]earer [A-Za-z0-9._~+/=-]{20,}' && categories="$categories authorization-bearer"
+    err "secret-scan" "entry content appears to contain a credential (${categories# }). Refusing to publish a secret into an expertise entry — remove it and retry."
+    exit 10
+  fi
+}
+
+# RFC 8259 requires escaping all C0 controls; we escape \t \r \n and refuse
+# anything else rather than emit invalid JSON.
+has_residual_ctrl() {
+  [ -n "$(printf '%s' "$1" | tr -d '\t\r\n' | LC_ALL=C tr -dc '[:cntrl:]')" ]
+}
+
+run_ctrl_check() {
+  for _f in "$DOMAIN" "$TITLE" "$BODY" "$SOURCE" "$TAGS_CSV"; do
+    if has_residual_ctrl "$_f"; then
+      err "body" "a field contains a control character that cannot be JSON-escaped — refusing"
+      exit 2
+    fi
+  done
+}
+
+# --- Check-only exit (before config, gates, key, or any network stage) -------
+
+if [ "$CHECK_ONLY" = 1 ]; then
+  run_secret_scan
+  run_ctrl_check
+  printf 'OK    [check-only] candidate passed argument, enum, size, control-character, and secret checks\n'
+  exit 0
 fi
 
 # --- Config helpers ----------------------------------------------------------
@@ -201,32 +268,7 @@ fi
 
 # --- Secret scan (fail-closed, category-only; before any network call) -------
 
-# Keep in lockstep with hooks/secrets-guard.sh and
-# hooks/session-secrets-guard.sh SECRET_PATTERNS (ADR-095; validate.sh
-# check_lockstep_duplication enforces byte-identity). The PEM alternative uses
-# the optional-group form because BSD grep rejects empty alternation (ADR-053).
-SECRET_PATTERNS='-----BEGIN (RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY|(^|[^A-Z0-9])(AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}([^A-Z0-9]|$)|gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{82,}|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|[Aa]uthorization: [Bb]earer [A-Za-z0-9._~+/=-]{20,}'
-
-# One concatenated buffer of every string field closes the same-call
-# field-splitting gap (ADR-096). All probes are boolean (`grep -q`): the
-# matched text never enters a variable and is never echoed — do not ever
-# replace these with -o/sed extraction for diagnostics.
-SCAN_BUFFER="${DOMAIN}
-${TITLE}
-${BODY}
-${SOURCE}
-${TAGS_CSV}"
-
-if printf '%s' "$SCAN_BUFFER" | grep -qE -- "$SECRET_PATTERNS"; then
-  categories=""
-  printf '%s' "$SCAN_BUFFER" | grep -qE -- '-----BEGIN (RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED )?PRIVATE KEY' && categories="$categories pem-private-key"
-  printf '%s' "$SCAN_BUFFER" | grep -qE -- '(^|[^A-Z0-9])(AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}([^A-Z0-9]|$)' && categories="$categories aws-access-key"
-  printf '%s' "$SCAN_BUFFER" | grep -qE -- 'gh[oprsu]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{82,}' && categories="$categories github-token"
-  printf '%s' "$SCAN_BUFFER" | grep -qE -- 'eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}' && categories="$categories signed-jwt"
-  printf '%s' "$SCAN_BUFFER" | grep -qE -- '[Aa]uthorization: [Bb]earer [A-Za-z0-9._~+/=-]{20,}' && categories="$categories authorization-bearer"
-  err "secret-scan" "entry content appears to contain a credential (${categories# }). Refusing to publish a secret into an expertise entry — remove it and retry."
-  exit 10
-fi
+run_secret_scan
 
 # --- JSON construction (pure bash 3.2; fail closed on residual controls) -----
 
@@ -240,18 +282,7 @@ json_escape() {
   printf '%s' "$s"
 }
 
-# RFC 8259 requires escaping all C0 controls; we escape \t \r \n and refuse
-# anything else rather than emit invalid JSON.
-has_residual_ctrl() {
-  [ -n "$(printf '%s' "$1" | tr -d '\t\r\n' | LC_ALL=C tr -dc '[:cntrl:]')" ]
-}
-
-for _f in "$DOMAIN" "$TITLE" "$BODY" "$SOURCE" "$TAGS_CSV"; do
-  if has_residual_ctrl "$_f"; then
-    err "body" "a field contains a control character that cannot be JSON-escaped — refusing"
-    exit 2
-  fi
-done
+run_ctrl_check
 
 TAGS_JSON=""
 if [ -n "$TAGS_CSV" ]; then
