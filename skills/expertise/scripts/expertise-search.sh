@@ -14,8 +14,11 @@
 #   limit  — integer 1-100, default 10 (server clamps regardless)
 #
 # Config (precedence: env > config file > default):
-#   EXPERTISE_SEARCH_URL      base URL, loopback only (default http://127.0.0.1:8080)
-#   EXPERTISE_SEARCH_API_KEY  bearer token (no default; required)
+#   EXPERTISE_SEARCH_URL          base URL (default http://127.0.0.1:8080);
+#                                 loopback only, unless the Lima opt-in is set
+#   EXPERTISE_SEARCH_API_KEY      bearer token (no default; required)
+#   EXPERTISE_ALLOW_LIMA_GATEWAY  =1 also allow the fixed Lima host-gateway
+#                                 pair host.lima.internal/192.168.5.2 (ADR-096)
 #   Config file: ~/.config/expertise-search/config, KEY=VALUE lines, mode 600,
 #   user-provisioned out-of-band. This script never writes it.
 #
@@ -101,6 +104,18 @@ is_loopback_host() {
   return 1
 }
 
+# Fixed two-entry Lima host-gateway predicate (ADR-096). The set is closed by
+# design — never extend it from config; a free-form host key would let a
+# tampered config point the bearer token at an arbitrary host. Keep in
+# lockstep with expertise-create.sh (validate.sh check_lockstep_duplication).
+is_lima_gateway_host() {
+  case "$1" in
+    host.lima.internal|HOST.LIMA.INTERNAL) return 0 ;;
+    192.168.5.2) return 0 ;;
+  esac
+  return 1
+}
+
 # --- Resolve config ---------------------------------------------------------
 
 if [ -f "$CONFIG_FILE" ]; then
@@ -132,8 +147,14 @@ case "$host_port" in
   *)      host="${host_port%%:*}" ;;
 esac
 if ! is_loopback_host "$host"; then
-  err "loopback" "refusing non-loopback base URL host: $host (loopback only by design — ADR-094)"
-  exit 3
+  allow_lima="${EXPERTISE_ALLOW_LIMA_GATEWAY:-}"
+  [ -n "$allow_lima" ] || allow_lima="$(config_get EXPERTISE_ALLOW_LIMA_GATEWAY || true)"
+  if [ "$allow_lima" = "1" ] && is_lima_gateway_host "$host"; then
+    : # Lima host-gateway, explicitly opted in (ADR-096)
+  else
+    err "loopback" "refusing base URL host: $host (loopback only, or the Lima host-gateway with EXPERTISE_ALLOW_LIMA_GATEWAY=1 — ADR-094/ADR-096)"
+    exit 3
+  fi
 fi
 
 # --- Resolve the API key (xtrace suppressed for every expanding line) -------

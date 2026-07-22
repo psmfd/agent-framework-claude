@@ -105,6 +105,7 @@ agent-framework-claude/
 ├── tests/                 # Test suites for project tooling (each suite: run-tests.sh, exit 0 PASS / 1 FAIL)
 │   ├── fixtures/bin/gh    # Deterministic gh shim shared by the identity-guard suites (ADR-083)
 │   ├── bash-destructive-guard/    # hooks/bash-destructive-guard.sh — compound/wrapper/find/safe-path cases
+│   ├── expertise-create/          # skills/expertise/scripts/expertise-create.sh — write-back contract (ADR-096)
 │   ├── expertise-search/          # skills/expertise/scripts/expertise-search.sh — helper contract (ADR-094)
 │   ├── fanout-nudge/              # hooks/fanout-nudge.sh — PostToolBatch advisory contract (ADR-090)
 │   ├── gh-identity-guard/         # hooks/gh-identity-guard.sh — pre-push identity ladder (ADR-054)
@@ -153,9 +154,10 @@ agent-framework-claude/
 ├── commands/              # Claude Code slash commands (symlinked to ~/.claude/commands/)
 │   └── review.md          # /review — 3-way parallel review (code + security + linter)
 ├── skills/                # Claude Code skills with bundled files (symlinked to ~/.claude/skills/)
-│   └── expertise/         # /expertise — read-only agent-expertise-api search (ADR-094)
+│   └── expertise/         # /expertise — agent-expertise-api search + gated write-back (ADR-094/096)
 │       ├── SKILL.md               # Skill body — steps + constraints
-│       └── scripts/expertise-search.sh  # Bundled helper — token-safe curl wrapper
+│       ├── scripts/expertise-search.sh  # Bundled helper — token-safe curl wrapper (read)
+│       └── scripts/expertise-create.sh  # Bundled helper — gated create-only write-back
 ├── hooks/                 # Shell scripts for Claude Code and git hooks
 │   ├── bash-destructive-guard.sh
 │   ├── fanout-nudge.sh
@@ -569,7 +571,7 @@ Skills live in `skills/` (one directory per skill: `SKILL.md` plus bundled files
 
 ### /expertise (`skills/expertise/`)
 
-Read-only semantic search of the local agent-expertise-api via a bundled token-safe helper script — an explicit, visible Bash tool call whose response enters context as untrusted tool output, per the carve-out in `rules/no-mcp-servers.md`. Read-only phase 1; design record ADR-094.
+Semantic search of the local agent-expertise-api via a bundled token-safe helper script — an explicit, visible Bash tool call whose response enters context as untrusted tool output, per the carve-out in `rules/no-mcp-servers.md` (design record ADR-094). A second bundled helper adds user-approved, create-only write-back, triple-gated by user-provisioned config opt-ins (write, Lima host-gateway, remote-write) and a fail-closed secret scan; entries always land in the API's draft/review queue. Design record ADR-096.
 
 ## Installation
 

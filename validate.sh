@@ -1195,10 +1195,12 @@ lockstep_compare() {
 check_lockstep_duplication() {
   local secrets_a="hooks/secrets-guard.sh" secrets_b="hooks/session-secrets-guard.sh"
   local ident_a="hooks/gh-identity-guard.sh" ident_b="hooks/session-gh-identity-guard.sh"
+  local exp_search="skills/expertise/scripts/expertise-search.sh"
+  local exp_create="skills/expertise/scripts/expertise-create.sh"
   local f
-  for f in "$secrets_a" "$secrets_b" "$ident_a" "$ident_b"; do
+  for f in "$secrets_a" "$secrets_b" "$ident_a" "$ident_b" "$exp_search" "$exp_create"; do
     if [[ ! -f "$DOTFILES_DIR/$f" ]]; then
-      error "lockstep" "$f missing — cannot verify hook-pair lockstep"
+      error "lockstep" "$f missing — cannot verify lockstep duplication"
       return
     fi
   done
@@ -1209,6 +1211,13 @@ check_lockstep_duplication() {
   lockstep_compare func extract_host     "$ident_a" "$ident_b"
   lockstep_compare func is_valid_login   "$ident_a" "$ident_b"
   lockstep_compare func parse_owner_repo "$ident_a" "$ident_b"
+
+  # Third SECRET_PATTERNS copy (ADR-096 write-back secret scan) — pairwise
+  # against secrets_a; transitive with the pair check above. The expertise
+  # scripts also duplicate the host-gate predicates between themselves.
+  lockstep_compare var  SECRET_PATTERNS      "$secrets_a" "$exp_create"
+  lockstep_compare func is_loopback_host     "$exp_search" "$exp_create"
+  lockstep_compare func is_lima_gateway_host "$exp_search" "$exp_create"
 }
 
 # --- Check ruleset required-checks vs workflow job names (ADR-086) ---

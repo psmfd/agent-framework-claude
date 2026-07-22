@@ -12,7 +12,9 @@
 #   2. extra args (unquoted query)     -> exit 2, quoting hint
 #   3. non-integer limit               -> exit 2
 #   4. out-of-range limit (0, 101)     -> exit 2
-#   5. non-loopback base URL           -> exit 3 (gate fires before key check)
+#   5. non-loopback base URL           -> exit 3 (gate fires before key check);
+#      Lima host-gateway pair refused without EXPERTISE_ALLOW_LIMA_GATEWAY=1,
+#      passes the gate with it (ADR-096), arbitrary hosts refused regardless
 #   6. scheme-less base URL            -> exit 2
 #   7. userinfo in base URL            -> exit 3
 #   8. config file with open perms     -> exit 2, refusal names chmod 600
@@ -100,6 +102,13 @@ run_sut 3 "scheme-file" EXPERTISE_SEARCH_URL="file://127.0.0.1/etc/passwd" -- "q
 # A '@' in the PATH (not userinfo) with a loopback host must not be misread as
 # userinfo — it fails later on readiness (exit 4), not the userinfo gate (3).
 run_sut 4 "at-in-path" EXPERTISE_SEARCH_API_KEY="$TEST_TOKEN" EXPERTISE_SEARCH_URL="http://127.0.0.1:1/foo@bar" -- "q"
+# Lima host-gateway opt-in (ADR-096): the fixed pair is refused without the
+# opt-in; with it, the URL gate passes and the run fails later at readiness
+# (exit 4 whether host.lima.internal resolves or not — port 1 never answers);
+# an arbitrary host is still refused even with the opt-in set.
+run_sut 3 "lima-no-optin" EXPERTISE_SEARCH_URL="http://host.lima.internal:1" -- "q"
+run_sut 4 "lima-optin" EXPERTISE_SEARCH_API_KEY="$TEST_TOKEN" EXPERTISE_ALLOW_LIMA_GATEWAY=1 EXPERTISE_SEARCH_URL="http://host.lima.internal:1" -- "q"
+run_sut 3 "lima-optin-other-host" EXPERTISE_ALLOW_LIMA_GATEWAY=1 EXPERTISE_SEARCH_URL="http://example.com:8080" -- "q"
 
 info "8: config file permission refusal"
 mkdir -p "$WORK/home/.config/expertise-search"
