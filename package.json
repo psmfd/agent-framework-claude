@@ -5,6 +5,6 @@
   "description": "Shared AI agent definitions and rules for Claude Code",
   "devDependencies": {
     "conventional-changelog-conventionalcommits": "^9.0.0",
-    "semantic-release": "^25.0.5"
+    "semantic-release": "^25.0.6"
   }
 }
