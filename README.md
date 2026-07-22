@@ -178,6 +178,7 @@ agent-framework-claude/
 │   ├── conventional-commits.md
 │   ├── debian-baseline.md
 │   ├── documentation-in-plan.md
+│   ├── expertise-capture.md
 │   ├── expertise-consumption.md
 │   ├── file-issues-first.md
 │   ├── gh-identity-guard.md
@@ -505,6 +506,10 @@ All Linux-targeting guidance assumes Debian 13 (Trixie) as the baseline distribu
 ### Documentation in Plan (`rules/documentation-in-plan.md`)
 
 Every implementation plan must enumerate the documentation surfaces a change implies and classify each (in-scope / out-of-scope-but-tracked / not-a-thing) before any file modification — ADR-eligibility is a plan-time classification, not a discovery during implementation. Sub-rule of `plan-before-code.md`. See ADR-071.
+
+### Expertise Capture (`rules/expertise-capture.md`)
+
+Subagents may emit an optional fenced, strictly-JSON expertise-candidates block before their terminal verdict line; the orchestrator gates each candidate (schema, enums, `expertise-create.sh --check-only` secret scan, loud rejection of approval-state/provenance fields), coalesces by normalized domain+title, and surfaces at most 10 per batch for mandatory per-entry human approval before any create. Approved bytes are created bytes (scratch-file pipe, never a heredoc). See ADR-098.
 
 ### Expertise Consumption (`rules/expertise-consumption.md`)
 

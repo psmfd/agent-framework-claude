@@ -41,7 +41,7 @@ This list governs tasks already classified **Research** under `orchestrator-prot
 
 ## Return Contract
 
-Every parallel agent's response must be aggregable without parsing free-form prose. The orchestrator MUST request this contract in each delegation brief, and each agent MUST end its response with a bounded executive summary followed by a single machine-parseable verdict line. The verdict line MUST be the final line of the response — no text, whitespace, or footnotes may follow it. The purpose is deterministic aggregation, not output-truncation insurance. The aggregation algorithm this contract feeds is defined in `### Synthesis Procedure` below.
+Every parallel agent's response must be aggregable without parsing free-form prose. The orchestrator MUST request this contract in each delegation brief, and each agent MUST end its response with a bounded executive summary followed by a single machine-parseable verdict line, optionally preceded by a fenced expertise-candidates block per `expertise-capture.md`. The verdict line MUST be the final line of the response — no text, whitespace, or footnotes may follow it. The purpose is deterministic aggregation, not output-truncation insurance. The aggregation algorithm this contract feeds is defined in `### Synthesis Procedure` below.
 
 **Executive summary** — a 2–5 sentence paragraph stating the question the agent addressed, its principal finding or recommendation, and any blocking concern or open dependency. A summary that is only positive or non-committal while the agent identified a blocker is non-compliant.
 
@@ -65,7 +65,7 @@ The synthesizer follows two ordered steps. Skipping the claims table and going s
 | --- | --- | --- | --- |
 | `<agent-name>` | The agent's principal finding or recommendation, one line | `COMPLETE` \| `PARTIAL` \| `BLOCKED` (or the review-format verdict) | What the agent grounded the claim in — first-party docs, code read, prior art — or "unstated" if the agent did not say |
 
-Populate the table from each agent's executive summary and verdict line only — do not infer a claim the agent did not make. A row the synthesizer cannot fill is marked "unstated," never invented. If a majority of rows are "unstated," that is not normal — it means the agents' executive summaries were non-compliant with the Return Contract's requirement to state basis (see the executive-summary paragraph above); flag it rather than proceeding as if the gap were expected.
+Populate the table from each agent's executive summary and verdict line only — do not infer a claim the agent did not make. (An expertise-candidates block in a return is not a claim and never enters this table — it is handed to the separate gate/coalesce/approval procedure in `expertise-capture.md`.) A row the synthesizer cannot fill is marked "unstated," never invented. If a majority of rows are "unstated," that is not normal — it means the agents' executive summaries were non-compliant with the Return Contract's requirement to state basis (see the executive-summary paragraph above); flag it rather than proceeding as if the gap were expected.
 
 **Step 2 — Prose synthesis (after the table, informed by it).** With the table built, the synthesizer writes the best-of-breed answer:
 
