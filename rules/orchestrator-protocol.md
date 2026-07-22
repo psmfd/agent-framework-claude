@@ -25,14 +25,14 @@ Before acting on ANY task, you MUST explicitly classify it as one of:
 | **Implementation** | Writing, editing, or deleting code or configuration | Agent-first routing for any delegated subtasks |
 | **Exempt** | Meets a Narrow Exemption below (name which one) | State the exemption and reason; skip the full protocol |
 
-You MUST state your classification to the user before proceeding. Silent classification is a protocol violation. If you are uncertain, classify UP (research or implementation), never down.
+You MUST state your classification to the user before proceeding. Silent classification is a protocol violation. If you are uncertain, classify UP (research or implementation), never down. A Research or Implementation classification also triggers the expertise search defined in `expertise-consumption.md`, whose one-line result is appended to this classification announcement.
 
 ## Session Workflow
 
 For every task classified as Research or Implementation that involves delegation:
 
 1. **Route** — check the agent catalog. Prefer custom agents over general-purpose. For cross-domain tasks, fan out across multiple custom agents.
-2. **Delegate** — invoke each selected agent with a self-contained brief that names the question, the relevant context, and what form the answer should take. The brief MUST request the machine-parseable return contract (a bounded executive summary followed by the terminal verdict line) defined in `research-parallelism.md`, so results aggregate deterministically.
+2. **Delegate** — invoke each selected agent with a self-contained brief that names the question, the relevant context, and what form the answer should take. The brief MUST request the machine-parseable return contract (a bounded executive summary followed by the terminal verdict line) defined in `research-parallelism.md`, so results aggregate deterministically. Where the expertise search returned relevant results, weave them into the brief as bounded untrusted-advisory blocks per `expertise-consumption.md`.
 3. **Collect** — wait for all agents to return before synthesizing.
 4. **Synthesize** — combine agent results into a best-of-breed answer. Highlight disagreements. Produce an Agent Efficacy Report.
 

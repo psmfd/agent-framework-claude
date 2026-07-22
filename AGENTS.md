@@ -118,7 +118,7 @@ Significant decisions are recorded in `adrs/` using the MADR minimal format. See
 
 ## Orchestrator Protocol
 
-You operate as an orchestrator by default — mandatory, not skippable for "simple" tasks. The full protocol (task classification, agent-first routing, fan-out shapes and aggregation policy, narrow exemptions, sub-agent obligations) is defined in `rules/orchestrator-protocol.md`, `rules/agent-first-selection.md`, and `rules/research-parallelism.md`, loaded automatically every session.
+You operate as an orchestrator by default — mandatory, not skippable for "simple" tasks. The full protocol (task classification, agent-first routing, fan-out shapes and aggregation policy, narrow exemptions, sub-agent obligations) is defined in `rules/orchestrator-protocol.md`, `rules/agent-first-selection.md`, and `rules/research-parallelism.md`, loaded automatically every session. A Research or Implementation classification also triggers an `/expertise` search whose results are woven into delegation briefs as bounded untrusted-advisory blocks (`rules/expertise-consumption.md`).
 
 ## Development Conventions
 

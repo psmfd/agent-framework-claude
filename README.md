@@ -178,6 +178,7 @@ agent-framework-claude/
 │   ├── conventional-commits.md
 │   ├── debian-baseline.md
 │   ├── documentation-in-plan.md
+│   ├── expertise-consumption.md
 │   ├── file-issues-first.md
 │   ├── gh-identity-guard.md
 │   ├── github-flow.md
@@ -504,6 +505,10 @@ All Linux-targeting guidance assumes Debian 13 (Trixie) as the baseline distribu
 ### Documentation in Plan (`rules/documentation-in-plan.md`)
 
 Every implementation plan must enumerate the documentation surfaces a change implies and classify each (in-scope / out-of-scope-but-tracked / not-a-thing) before any file modification — ADR-eligibility is a plan-time classification, not a discovery during implementation. Sub-rule of `plan-before-code.md`. See ADR-071.
+
+### Expertise Consumption (`rules/expertise-consumption.md`)
+
+After classifying a task Research or Implementation, the orchestrator runs one `/expertise` search (announced, never silently skipped without an attempted call) and weaves relevant results into delegation briefs as bounded, verbatim, hygiene-enveloped untrusted-advisory blocks — never paraphrased into instructions, never a substitute for approval. Orchestrator-only; subagents do not self-invoke the skill. See ADR-097.
 
 ### File Issues First (`rules/file-issues-first.md`)
 
