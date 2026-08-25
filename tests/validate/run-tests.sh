@@ -207,34 +207,31 @@ chmod +x "$CLEAN_BIN/gh"
 
 CLEAN_PATH="$CLEAN_BIN"
 
-# --- Overlay: apply $REPO_ROOT's uncommitted validate.sh + rulesets/ onto
-# the fixture (see the "Uncommitted-gate overlay" header note above for why).
-# OVERLAY_SRC is a frozen snapshot taken once, right now — not a live
-# reference to $REPO_ROOT — so a case that resets by re-applying the overlay
-# is unaffected by any concurrent change to the real working tree during the
-# run. apply_overlay() is idempotent; reset_fixture() (defined below) calls
-# it on every reset for two distinct reasons: (1) rulesets/*.json is
-# untracked in the fixture's own git repo (cp'd in, never `git add`ed there),
-# so `git checkout -- .` cannot restore or re-create it — only re-copying
-# from the snapshot can; (2) validate.sh IS a normally-tracked file left
-# locally modified by the overlay, and `git checkout -- .` reverts every
-# modified tracked file, so without the re-apply it would silently regress
-# validate.sh back to the stale committed-HEAD version on every reset.
+# --- Overlay: apply uncommitted validation dependencies to the fixture. ---
+# The local clone sees committed HEAD only. Freeze every working-tree file
+# needed by current validate.sh so the clean baseline tests the gate being
+# developed, including newly added untracked control-plane fixtures.
 OVERLAY_SRC="$WORK/overlay-src"
-mkdir -p "$OVERLAY_SRC/scripts"
+mkdir -p "$OVERLAY_SRC/scripts" "$OVERLAY_SRC/rules" "$OVERLAY_SRC/adrs" "$OVERLAY_SRC/tests"
 cp "$REPO_ROOT/$VALIDATE_REL" "$OVERLAY_SRC/$VALIDATE_REL"
-# scripts/regen-agent-catalog.sh joined the overlay set with #28 (validate.sh
-# delegates check_agent_catalog to it, so the two must be version-matched for
-# the catalog cases to exercise the CURRENT gate logic). Tracked like
-# validate.sh: `git checkout -- .` reverts it, so apply_overlay re-copies it.
+cp "$REPO_ROOT/settings.json" "$OVERLAY_SRC/settings.json"
 cp "$REPO_ROOT/scripts/regen-agent-catalog.sh" "$OVERLAY_SRC/scripts/regen-agent-catalog.sh"
+cp "$REPO_ROOT/rules/plain-english.md" "$OVERLAY_SRC/rules/plain-english.md"
+cp "$REPO_ROOT/adrs/099-plain-english-write-gate.md" "$OVERLAY_SRC/adrs/099-plain-english-write-gate.md"
+cp -R "$REPO_ROOT/tests/plain-english-gate" "$OVERLAY_SRC/tests/plain-english-gate"
 if [[ -d "$REPO_ROOT/rulesets" ]]; then
   cp -R "$REPO_ROOT/rulesets" "$OVERLAY_SRC/rulesets"
 fi
 
 apply_overlay() {
   cp "$OVERLAY_SRC/$VALIDATE_REL" "$FIXTURE/$VALIDATE_REL"
+  cp "$OVERLAY_SRC/settings.json" "$FIXTURE/settings.json"
   cp "$OVERLAY_SRC/scripts/regen-agent-catalog.sh" "$FIXTURE/scripts/regen-agent-catalog.sh"
+  mkdir -p "$FIXTURE/rules" "$FIXTURE/adrs" "$FIXTURE/tests"
+  cp "$OVERLAY_SRC/rules/plain-english.md" "$FIXTURE/rules/plain-english.md"
+  cp "$OVERLAY_SRC/adrs/099-plain-english-write-gate.md" "$FIXTURE/adrs/099-plain-english-write-gate.md"
+  rm -rf "$FIXTURE/tests/plain-english-gate"
+  cp -R "$OVERLAY_SRC/tests/plain-english-gate" "$FIXTURE/tests/plain-english-gate"
   rm -rf "$FIXTURE/rulesets"
   if [[ -d "$OVERLAY_SRC/rulesets" ]]; then
     cp -R "$OVERLAY_SRC/rulesets" "$FIXTURE/rulesets"

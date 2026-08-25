@@ -31,7 +31,13 @@ Hooks are configured in `settings.json` under the `hooks` key, keyed by Claude C
 
 Git-native hooks (pre-commit, pre-push) are installed by `setup.sh` into `.git/hooks/` and run independently of the Claude Code hook system.
 
-When adding a global guard hook, register it in `settings.json` and ensure the hook script in `hooks/` passes `shellcheck` (gated by `validate.sh`).
+When adding a global guard hook, register it in `settings.json`. Command-hook scripts in `hooks/` must pass `shellcheck`; prompt hooks need control-plane fixtures and an honest statement of what offline validation cannot prove.
+
+#### Global Plain-English Write Gate
+
+The Plain-English gate is a global `PreToolUse` prompt hook registered in `settings.json` with three path filters: `Write(README.md)`, `Write(CONTRIBUTING.md)`, and `Write(docs/**/*.md)`. It judges prose while preserving specialist terminology and structured syntax. A determinate violation returns `ok: false`; `continueOnBlock: true` gives Claude the specific reason and lets it retry. Uncertainty returns `ok: true` and follows normal permission flow without a warning because prompt hooks have no allow-with-warning result.
+
+The initial release covers complete `Write` calls only. `Edit`, `MultiEdit`, notebook cells, Bash-generated files, external work-item mutations, instruction files, and other paths remain behavioral review. `tests/plain-english-gate/run-tests.sh` checks registration, exact path scope, prompt clauses, and fixture coverage. It does not claim deterministic semantic model quality. See `rules/plain-english.md` and ADR-099.
 
 #### Global Destructive Command Guard
 
@@ -268,6 +274,7 @@ The script checks:
 - No concrete MCP package references in distributed prose (warns — `rules/*.md`, `agents/*.md`, `commands/*.md`, `skills/*/SKILL.md`, and `web/instructions.md` bodies are scanned for the `@modelcontextprotocol/` npm scope and the `mcp-server-<name>` package shape; the bare substring `mcp` is deliberately not matched, so policy discussion never false-positives; `rules/no-mcp-servers.md`, ADR-002, #37)
 - No committed plugin/MCP manifests (errors — any `.mcp.json` file or `.claude-plugin/` directory anywhere in the repo is the concrete artifact of the plugin-packaged-MCP shape `rules/no-mcp-servers.md` prohibits; `node_modules/` and `.git/` are pruned; ADR-094)
 - Every `rules/*.md` carries an `**Enforcement:**` line within 5 lines after its H1 (errors when missing; warns when the mechanism token falls outside the vocabulary documented in the Rules frontmatter reference above — #23, ADR-084)
+- Plain-English Write-gate control-plane checks verify prompt-hook registration, exact path filters, preservation and anti-pattern clauses, and fixture coverage; semantic verdict quality remains a real-Claude prototype concern (ADR-099, #112)
 - Symlinks from `~/.claude/` point to the correct targets
 - Agent catalog drift (via `scripts/regen-agent-catalog.sh --check`, ADR-062/ADR-085): `AGENTS.md` is canonical — name presence vs `agents/*.md` (bidirectional), `rules/agent-first-selection.md` carries the AGENTS.md pointer and no reintroduced table copy, and README Tier vs `AGENTS.md` / README Model vs agent `model:` frontmatter; drift is an error (fix `AGENTS.md`/README by hand). Both table extractions fail loudly on a drifted/reformatted header instead of silently parsing zero rows (#28)
 - Agent delegation references resolve to real agent files
@@ -291,6 +298,7 @@ When changing one file in a pair, the partner must be updated in the same commit
 | --- | --- | --- |
 | `agents/<name>.md` (add/remove/rename) | `AGENTS.md`, `README.md` (Current Agents), `rules/agent-first-selection.md`, `web/instructions.md` (Agent Catalog) | All four must be updated together |
 | `rules/<name>.md` (add/remove) | `README.md` (Current Rules) | One H3 entry per rule file |
+| `settings.json` (Plain-English prompt gate) | `rules/plain-english.md`, ADR-099, `tests/plain-english-gate/` | Path scope, preservation clauses, response behavior, and control-plane fixtures stay aligned |
 | `README.md` (Current Agents) | `agents/` directory | One table row per agent file |
 | `README.md` (Current Rules) | `rules/` directory | One H3 entry per rule file |
 | `README.md` (Current Commands) | `commands/` directory | One H3 entry per command file (not gated by `validate.sh` — hand-verify) |

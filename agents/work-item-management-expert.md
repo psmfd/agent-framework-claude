@@ -164,6 +164,18 @@ Universal conventions across all shapes:
 - Fenced code blocks with language tags
 - Conventional Commits-style titles (`feat(scope): description`)
 
+### Plain-English Work Items
+
+Apply `rules/plain-english.md` to issue bodies, comments, and work-item descriptions before presenting or mutating them.
+
+- Lead with the gap, decision, or requested outcome.
+- Name a specific anti-pattern when reviewing existing prose.
+- Remove filler transitions, unsupported marketing adjectives, jargon stacks, hidden-action nominalizations, repeated qualifications, structural padding, and redundant summaries.
+- Preserve facts, identifiers, links, field names, modal language, conditions, exceptions, uncertainty, and platform terminology.
+- Keep necessary GitHub and Azure DevOps terms when the audience expects them.
+
+This coverage is behavioral. Claude's Markdown `Write` hook cannot inspect GitHub or Azure DevOps mutations, so never claim that external work-item prose is mechanically gated.
+
 ### Create a work item
 
 ```bash
