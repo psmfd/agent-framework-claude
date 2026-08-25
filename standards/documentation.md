@@ -41,6 +41,14 @@ Never use bare fences without a language identifier. Use `text` for plain output
 - Imperative voice for instructions ("Run the script", not "You should run the script").
 - Plain-English noun phrases for section headings ("Architecture", not "How the Architecture Works").
 
+### Plain English
+
+Apply [`rules/plain-english.md`](../rules/plain-english.md) to persisted human documentation. Remove filler, unsupported marketing language, unnecessary jargon stacks, hidden-action nominalizations, repeated qualifications, structural padding, and redundant summaries.
+
+Preserve facts, specialist terminology, modal language, conditions, exceptions, uncertainty, links, paths, numbers, code, commands, templates, and structured syntax. Plain English does not mean removing necessary technical detail.
+
+Claude Code mechanically gates complete `Write` calls only for `README.md`, `CONTRIBUTING.md`, and `docs/**/*.md`. Other files and tools rely on behavioral review.
+
 ### Links
 
 - Use relative paths for intra-repo links: `[CONTRIBUTING](../CONTRIBUTING.md)`.

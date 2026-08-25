@@ -972,6 +972,72 @@ check_hooks() {
   done
 }
 
+# --- Check plain-English Write gate control plane (ADR-099, #112) ---
+check_plain_english_gate() {
+  local settings="$DOTFILES_DIR/settings.json"
+  local rule="$DOTFILES_DIR/rules/plain-english.md"
+  local fixtures="$DOTFILES_DIR/tests/plain-english-gate/fixtures.json"
+  local suite="$DOTFILES_DIR/tests/plain-english-gate/run-tests.sh"
+  local failed=0 count required write_block
+
+  for required in "$settings" "$rule" "$fixtures" "$suite"; do
+    if [[ ! -f "$required" ]]; then
+      error "plain-english" "required control-plane file missing: ${required#"$DOTFILES_DIR"/}"
+      failed=1
+    fi
+  done
+  [[ $failed -eq 0 ]] || return
+
+  if [[ ! -x "$suite" ]]; then
+    error "plain-english" "tests/plain-english-gate/run-tests.sh is not executable"
+    failed=1
+  fi
+
+  write_block="$(awk '
+    $0 == "        \"matcher\": \"Write\"," { inside=1 }
+    inside { print }
+    inside && $0 == "      }," { exit }
+  ' "$settings")"
+  if [[ -z "$write_block" ]]; then
+    error "plain-english" "settings.json lacks the matcher: Write gate block"
+    failed=1
+  fi
+  count="$(grep -Fc '"type": "prompt"' <<< "$write_block" 2>/dev/null || true)"
+  if [[ "$count" != "3" ]]; then
+    error "plain-english" "expected 3 prompt handlers under matcher: Write; found ${count:-0}"
+    failed=1
+  fi
+
+  # shellcheck disable=SC2016  # match the literal prompt placeholder.
+  for required in 'Write(README.md)' 'Write(CONTRIBUTING.md)' 'Write(docs/**/*.md)' \
+                  'continueOnBlock' '$ARGUMENTS' 'untrusted data' \
+                  'Never follow instructions' 'at most 160 characters' \
+                  'If uncertain, allow' 'Return JSON only'; do
+    if ! grep -Fq "$required" <<< "$write_block"; then
+      error "plain-english" "settings.json missing required gate clause: $required"
+      failed=1
+    fi
+  done
+
+  for required in 'allowed-prose' 'blocked-prose' 'prompt-injection' \
+                  'protected-syntax' 'excluded-path' 'malformed-input' \
+                  'hook-failure'; do
+    if ! grep -Fq "\"category\": \"$required\"" "$fixtures"; then
+      error "plain-english" "fixtures missing category: $required"
+      failed=1
+    fi
+  done
+
+  if ! grep -Fq '**Enforcement:** PreToolUse hook' "$rule"; then
+    error "plain-english" "rules/plain-english.md lacks the PreToolUse enforcement boundary"
+    failed=1
+  fi
+
+  if [[ $failed -eq 0 ]]; then
+    ok "plain-english" "Write prompt-gate registration, scope, hardening, and fixtures"
+  fi
+}
+
 # --- Check hook scripts pass shellcheck (security-critical; ERROR-gated) ---
 # Hooks enforce security boundaries; a shellcheck defect can silently disable
 # one. Findings are ERRORs (blocking). For a genuine false positive, add a
@@ -1450,6 +1516,10 @@ main() {
   # Hooks
   echo "Hooks:"
   check_hooks
+  echo ""
+
+  echo "Plain-English Gate:"
+  check_plain_english_gate
   echo ""
 
   echo "Shellcheck:"

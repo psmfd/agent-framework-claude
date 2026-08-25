@@ -110,6 +110,7 @@ agent-framework-claude/
 │   ├── fanout-nudge/              # hooks/fanout-nudge.sh — PostToolBatch advisory contract (ADR-090)
 │   ├── gh-identity-guard/         # hooks/gh-identity-guard.sh — pre-push identity ladder (ADR-054)
 │   ├── instructions-loaded-log/  # hooks/instructions-loaded-log.sh — InstructionsLoaded logger (ADR-092)
+│   ├── plain-english-gate/       # Write prompt-gate control-plane fixtures (ADR-099)
 │   ├── rulesets/          # scripts/rulesets.sh — normalization + apply-rail fixtures (ADR-086)
 │   ├── secrets-guard/     # hooks/secrets-guard.sh — staged-blob bypass tests (ADR-059)
 │   ├── session-gh-identity-guard/ # hooks/session-gh-identity-guard.sh — PreToolUse JSON contract
@@ -186,6 +187,7 @@ agent-framework-claude/
 │   ├── no-mcp-servers.md
 │   ├── orchestrator-protocol.md
 │   ├── plan-before-code.md
+│   ├── plain-english.md
 │   ├── post-implementation-review.md
 │   ├── pr-template-standard.md
 │   ├── research-parallelism.md
@@ -307,13 +309,14 @@ See [`web/instructions.md`](web/instructions.md) and [ADR-048](adrs/048-claude-c
 
 ### Hooks
 
-Hooks are shell scripts that run in response to Claude Code session events, providing automated pre-flight checks and security guards. Claude Code supports 26 hook events; all events support actionable output.
+Hooks run commands or model prompts in response to Claude Code session events. They provide pre-flight checks, semantic gates, security guards, and observability.
 
 | Hook | Event | Purpose |
 | --- | --- | --- |
 | `bash-destructive-guard.sh` | `PreToolUse` | Denies `rm`/`mv` commands targeting paths outside a configurable safe list |
 | `session-secrets-guard.sh` | `PreToolUse` | Denies agent writes or echos of secrets before they reach disk |
 | `session-gh-identity-guard.sh` | `PreToolUse` | Denies mutating `gh`/`git push` ops when the active GitHub identity is wrong |
+| Plain-English prompt gate | `PreToolUse` | Denies determinate readability violations on complete eligible `Write` calls (ADR-099) |
 | `gh-identity-guard.sh` | git `pre-push` | Blocks pushes from the wrong GitHub account (raw terminal/IDE vector) |
 | `stop-preflight-check.sh` | `Stop` | Runs a description prompt before the session ends |
 | `subagent-verdict-guard.sh` | `SubagentStop` | Blocks a framework custom agent returning without its verdict line (ADR-088) |
@@ -327,6 +330,8 @@ The `bash-destructive-guard.sh` hook is a global guard that denies `rm` and `mv`
 The `session-secrets-guard.sh` hook is the in-session (layer 2) counterpart to the `secrets-guard.sh` pre-commit hook (layer 1). It fires on `Bash`, `Write`, `Edit`, `MultiEdit`, and `NotebookEdit` tool calls and denies any that would surface a secret — an inline secret literal or credential-file read in a Bash command, or a secret written/edited into a file — before it reaches disk. Same pattern set and `SKIP_SECRETS_GUARD=1` / `.secrets-guard-allowlist` overrides as the git hook. See ADR-053.
 
 The `session-gh-identity-guard.sh` (`PreToolUse`) and `gh-identity-guard.sh` (git `pre-push`) hooks are a two-layer, fail-closed guard against pushing or mutating GitHub from the wrong account on a multi-account host. The in-session hook denies a mutating `gh`/`git push` call when the active identity is wrong (a cheap pre-check means only mutating ops are probed); the git pre-push hook closes the raw-terminal/IDE vector. The signal is hybrid — a local-only (gitignored) `.gh-expected-identity` pin (strict login match) when present, else repo accessibility. Overrides: `GH_IDENTITY_OVERRIDE=<login>` (env var only; ADR-070), `.gh-identity-allowlist`, `SKIP_GH_IDENTITY_GUARD=1`. See `rules/gh-identity-guard.md` and ADR-054.
+
+The Plain-English prompt gate applies to complete `Write` calls for `README.md`, `CONTRIBUTING.md`, and `docs/**/*.md`. A determinate violation is denied before reaching disk and its reason returns to Claude for a corrected retry. The gate preserves specialist terminology and structured syntax. It does not cover `Edit`, `MultiEdit`, notebook cells, external work items, or other paths. Uncertain judgments allow normal permission flow without a warning because prompt hooks have no allow-with-warning result. See `rules/plain-english.md` and ADR-099.
 
 Hooks are configured in `settings.json`. Restart Claude Code after any hook configuration changes.
 
@@ -538,6 +543,10 @@ Mandatory session-level protocol unifying agent-first selection and research par
 ### Plan Before Code (`rules/plan-before-code.md`)
 
 The agent must never modify code without first presenting an implementation plan and receiving explicit user approval. The plan must specify what files change, what the changes are, and why. Reading, searching, and exploring code to build the plan requires no approval.
+
+### Plain English (`rules/plain-english.md`)
+
+Persisted human documentation uses direct, precise English while preserving facts, modal language, conditions, exceptions, specialist terminology, and structured syntax. A Claude `PreToolUse` prompt gate denies determinate violations for complete `Write` calls to `README.md`, `CONTRIBUTING.md`, and `docs/**/*.md`; other paths and tools rely on behavioral review. See ADR-099.
 
 ### Post-Implementation Review (`rules/post-implementation-review.md`)
 

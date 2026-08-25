@@ -135,6 +135,18 @@ Omit: changelog (use git tags), authors (use git history), license (use LICENSE 
 - Imperative mood for procedures: "Configure the endpoint" not "You should configure the endpoint"
 - Present tense for descriptions: "The function returns" not "The function will return"
 
+### Plain-English Review
+
+Apply `rules/plain-english.md` when reviewing persisted human documentation. Write proposed guidance in plain English directly rather than adding a separate cleanup pass.
+
+- Identify the specific Claudish anti-pattern and affected passage. Do not report only that prose is difficult to read.
+- Remove filler, unsupported marketing language, hidden-action nominalizations, repeated qualifications, structural padding, and redundant summaries.
+- Preserve facts, modal language, conditions, exceptions, uncertainty, specialist terminology, links, paths, numbers, and structured syntax.
+- Do not simplify a domain rule or settle contested policy substance under the label of readability. The policy-substance boundary in Constraints still applies.
+- Treat `agents/**`, `rules/**`, skills, commands, and other instruction files as deliberate prompt content. Review them for precision under their own standards, not as ordinary documentation.
+
+The Claude `PreToolUse` gate covers only complete `Write` calls to `README.md`, `CONTRIBUTING.md`, and `docs/**/*.md`. Review other persisted documentation behaviorally without claiming mechanical enforcement.
+
 ### Terminology Consistency
 
 - Define terms on first use in a document
