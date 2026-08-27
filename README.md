@@ -105,6 +105,7 @@ agent-framework-claude/
 ├── tests/                 # Test suites for project tooling (each suite: run-tests.sh, exit 0 PASS / 1 FAIL)
 │   ├── fixtures/bin/gh    # Deterministic gh shim shared by the identity-guard suites (ADR-083)
 │   ├── bash-destructive-guard/    # hooks/bash-destructive-guard.sh — compound/wrapper/find/safe-path cases
+│   ├── codesearch/                # skills/codesearch/scripts/code-search.sh — wrapper contract (ADR-100)
 │   ├── expertise-create/          # skills/expertise/scripts/expertise-create.sh — write-back contract (ADR-096)
 │   ├── expertise-search/          # skills/expertise/scripts/expertise-search.sh — helper contract (ADR-094)
 │   ├── fanout-nudge/              # hooks/fanout-nudge.sh — PostToolBatch advisory contract (ADR-090)
@@ -155,6 +156,9 @@ agent-framework-claude/
 ├── commands/              # Claude Code slash commands (symlinked to ~/.claude/commands/)
 │   └── review.md          # /review — 3-way parallel review (code + security + linter)
 ├── skills/                # Claude Code skills with bundled files (symlinked to ~/.claude/skills/)
+│   ├── codesearch/        # /codesearch — semantic repository search over the ccc CLI (ADR-100)
+│   │   ├── SKILL.md               # Skill body — steps + constraints
+│   │   └── scripts/code-search.sh # Bundled helper — gated, env-scrubbed ccc wrapper
 │   └── expertise/         # /expertise — agent-expertise-api search + gated write-back (ADR-094/096)
 │       ├── SKILL.md               # Skill body — steps + constraints
 │       ├── scripts/expertise-search.sh  # Bundled helper — token-safe curl wrapper (read)
@@ -587,6 +591,10 @@ Three-way parallel review — `code-review-expert` + `security-review-expert` + 
 ## Current Skills
 
 Skills live in `skills/` (one directory per skill: `SKILL.md` plus bundled files) and are symlinked to `~/.claude/skills/` by `setup.sh`. Unlike single-file commands, a skill can carry helper scripts resolved via `${CLAUDE_SKILL_DIR}`.
+
+### /codesearch (`skills/codesearch/`)
+
+Semantic search over the current repository's cocoindex-code index via a bundled wrapper around the `ccc` CLI — finds rules, agents, ADRs, and code by meaning where Grep needs the literal string. Read-only: the wrapper's subcommand allowlist admits `search` and `status` only, refuses the engine's MCP server fail-closed, contains `--path`/`--lang` filters against argument injection and traversal, and invokes `ccc` under a scrubbed environment. Results are returned inside a nonce-delimited untrusted-content envelope, capped per result and per call. The engine is acquired out-of-band and the index is refreshed manually. Design record ADR-100.
 
 ### /expertise (`skills/expertise/`)
 

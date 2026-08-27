@@ -24,3 +24,5 @@ node_modules/
 
 # Working document for the Claude-only port — never publish (see PORT-PLAN.md header)
 PORT-PLAN.md
+# CocoIndex Code (ccc)
+/.cocoindex_code/

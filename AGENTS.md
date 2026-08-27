@@ -37,6 +37,7 @@ tests/instructions-loaded-log/run-tests.sh  # instructions-loaded-log.sh Instruc
 tests/setup-claude-cli/run-tests.sh         # setup.sh setup_claude_cli() install section (ADR-093)
 tests/expertise-search/run-tests.sh         # skills/expertise expertise-search.sh helper contract (ADR-094)
 tests/expertise-create/run-tests.sh         # skills/expertise expertise-create.sh write-back contract (ADR-096)
+tests/codesearch/run-tests.sh               # skills/codesearch code-search.sh wrapper contract (ADR-100)
 tests/validate/run-tests.sh                 # validate.sh clone-and-mutate regression (bash 4+)
 tests/wim/run-tests.sh                      # end-to-end work-item scripts via CLI shims
 tests/worktree-guard/run-tests.sh           # worktree-create.sh symlink containment (ADR-070)
